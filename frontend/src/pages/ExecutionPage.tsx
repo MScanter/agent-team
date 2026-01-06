@@ -1,0 +1,355 @@
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Send, Pause, Play, Square } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { useExecution, useCreateExecution, useControlExecution, useExecutionStream } from '@/hooks'
+import { ExecutionChat } from '@/components/Execution'
+import { buildExecutionLLMConfig } from '@/services/modelConfigStore'
+
+export default function ExecutionPage() {
+  const navigate = useNavigate()
+  const { id } = useParams<{ id: string }>()
+  const [searchParams] = useSearchParams()
+  const teamId = searchParams.get('team')
+
+  const [topicInput, setTopicInput] = useState('')
+  const [chatInput, setChatInput] = useState('')
+  const [clientMessages, setClientMessages] = useState<any[]>([])
+  const [isSendingFollowup, setIsSendingFollowup] = useState(false)
+  const [startError, setStartError] = useState<string | null>(null)
+  const [executionId, setExecutionId] = useState<string | null>(id || null)
+  const [showStartForm, setShowStartForm] = useState(!id && !!teamId)
+
+  const { data: execution, isLoading } = useExecution(executionId || '')
+  const createExecution = useCreateExecution()
+  const controlExecution = useControlExecution()
+  const llm = buildExecutionLLMConfig()
+  const { messages, status: streamStatus, error: streamError } = useExecutionStream(
+    execution?.status === 'running' || execution?.status === 'pending' ? executionId : null
+  )
+
+  const handleStart = async () => {
+    if (!teamId) return
+    if (!llm) return
+    setStartError(null)
+    try {
+      const result = await createExecution.mutateAsync({
+        team_id: teamId,
+        input: topicInput.trim(),
+        title: (topicInput.trim() || '讨论').slice(0, 50),
+        llm,
+      })
+      setExecutionId(result.id)
+      setShowStartForm(false)
+      setTopicInput('')
+    } catch (e: any) {
+      const detail = e?.response?.data?.detail
+      setStartError(typeof detail === 'string' ? detail : detail ? JSON.stringify(detail) : e?.message || '创建执行失败')
+    }
+  }
+
+  const handleControl = async (action: string) => {
+    if (!executionId) return
+    await controlExecution.mutateAsync({ id: executionId, action })
+  }
+
+  const apiBase = useMemo(() => {
+    const base = (import.meta as any).env?.VITE_API_BASE_URL || '/api'
+    return String(base).replace(/\/$/, '')
+  }, [])
+
+  const sendFollowup = async () => {
+    if (!executionId || !chatInput.trim()) return
+    if (!execution) return
+
+    const text = chatInput.trim()
+    setChatInput('')
+    setClientMessages((prev) => [
+      ...prev,
+      {
+        id: `${executionId}-user-${Date.now()}`,
+        sequence: 0,
+        round: execution.current_round || 0,
+        phase: 'user',
+        sender_type: 'user',
+        sender_id: undefined,
+        sender_name: 'you',
+        content: text,
+        content_type: 'text',
+        confidence: undefined,
+        wants_to_continue: true,
+        input_tokens: 0,
+        output_tokens: 0,
+        metadata: {},
+        created_at: new Date().toISOString(),
+      },
+    ])
+
+    if (execution.status === 'running') {
+      await handleControl('pause')
+    }
+
+    setIsSendingFollowup(true)
+    try {
+      const res = await fetch(`${apiBase}/executions/${executionId}/followup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ input: text }),
+      })
+      if (!res.ok || !res.body) {
+        throw new Error(`followup failed: ${res.status}`)
+      }
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      const pushSystem = (content: string) => {
+        setClientMessages((prev) => [
+          ...prev,
+          {
+            id: `${executionId}-sys-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            sequence: 0,
+            round: 0,
+            phase: 'status',
+            sender_type: 'system',
+            sender_name: 'system',
+            content,
+            content_type: 'text',
+            wants_to_continue: true,
+            input_tokens: 0,
+            output_tokens: 0,
+            metadata: {},
+            created_at: new Date().toISOString(),
+          },
+        ])
+      }
+
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const parts = buffer.split('\n\n')
+        buffer = parts.pop() || ''
+        for (const part of parts) {
+          const line = part.split('\n').find((l) => l.startsWith('data: '))
+          if (!line) continue
+          const payload = line.slice('data: '.length)
+          let evt: any
+          try {
+            evt = JSON.parse(payload)
+          } catch {
+            continue
+          }
+
+          if (evt.event_type === 'error') {
+            pushSystem(`错误: ${(evt.data && evt.data.message) || 'followup error'}`)
+            continue
+          }
+
+          if (evt.event_type === 'status') {
+            pushSystem((evt.data && evt.data.message) || 'status')
+            continue
+          }
+
+          if (evt.event_type === 'opinion' || evt.event_type === 'summary' || evt.event_type === 'done') {
+            const msg = {
+              id: `${executionId}-fu-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+              sequence: 0,
+              round: (evt.data && evt.data.round) || 0,
+              phase: (evt.data && evt.data.phase) || evt.event_type,
+              sender_type: evt.agent_id ? 'agent' : 'system',
+              sender_id: evt.agent_id,
+              sender_name: (evt.data && evt.data.agent_name) || (evt.agent_id ? undefined : 'system'),
+              content:
+                (evt.data && evt.data.content) ||
+                (evt.data && evt.data.summary) ||
+                (evt.data && evt.data.final_output) ||
+                (evt.data && evt.data.final_summary) ||
+                '',
+              content_type: 'text',
+              wants_to_continue: (evt.data && evt.data.wants_to_continue) ?? true,
+              input_tokens: 0,
+              output_tokens: 0,
+              metadata: {},
+              created_at: new Date().toISOString(),
+            }
+            setClientMessages((prev) => [...prev, msg])
+          }
+        }
+      }
+    } catch (e: any) {
+      setClientMessages((prev) => [
+        ...prev,
+        {
+          id: `${executionId}-sys-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          sequence: 0,
+          round: 0,
+          phase: 'error',
+          sender_type: 'system',
+          sender_name: 'system',
+          content: `追问失败: ${e?.message || String(e)}`,
+          content_type: 'text',
+          wants_to_continue: true,
+          input_tokens: 0,
+          output_tokens: 0,
+          metadata: {},
+          created_at: new Date().toISOString(),
+        },
+      ])
+    } finally {
+      setIsSendingFollowup(false)
+    }
+  }
+
+  if (showStartForm) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="card w-full max-w-lg">
+          <h2 className="text-xl font-bold text-white mb-4">开始新讨论</h2>
+          {!llm && (
+            <div className="mb-4 text-sm text-yellow-300 bg-yellow-900/30 border border-yellow-800 rounded p-3">
+              需要先在“API配置”里创建默认配置并填写 API Key。
+              <button
+                type="button"
+                className="ml-2 underline text-yellow-200 hover:text-yellow-100"
+                onClick={() => navigate('/models')}
+              >
+                去配置
+              </button>
+            </div>
+          )}
+          {startError && (
+            <div className="mb-4 text-sm text-red-300 bg-red-900/30 border border-red-800 rounded p-3">
+              创建失败：{startError}
+            </div>
+          )}
+          <textarea
+            className="input w-full h-32 mb-4"
+            placeholder="输入讨论主题或关键词（可选）..."
+            value={topicInput}
+            onChange={(e) => setTopicInput(e.target.value)}
+          />
+          <button
+            className="btn btn-primary w-full"
+            onClick={handleStart}
+            disabled={createExecution.isPending || !llm}
+          >
+            {createExecution.isPending ? '创建中...' : '开始讨论'}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-gray-400">加载中...</div>
+      </div>
+    )
+  }
+
+  if (!execution) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-gray-400">执行不存在</div>
+      </div>
+    )
+  }
+
+  const baseMessages = messages.length > 0 ? messages : execution.recent_messages
+  const displayMessages = [...baseMessages, ...clientMessages]
+
+  return (
+    <div className="flex flex-col h-screen">
+      <div className="flex items-center justify-between p-4 border-b border-gray-700">
+        <div>
+          <h1 className="text-xl font-bold text-white">{execution.title || '讨论'}</h1>
+          <p className="text-sm text-gray-400">
+            状态: {execution.status} | 轮次: {execution.current_round}
+            {streamStatus === 'connecting' && ' | 连接中...'}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {execution.status === 'running' ? (
+            <button className="btn btn-secondary flex items-center" onClick={() => handleControl('pause')}>
+              <Pause className="w-4 h-4 mr-2" />
+              暂停
+            </button>
+          ) : execution.status === 'paused' ? (
+            <button className="btn btn-primary flex items-center" onClick={() => handleControl('resume')}>
+              <Play className="w-4 h-4 mr-2" />
+              继续
+            </button>
+          ) : null}
+
+          {['running', 'paused'].includes(execution.status) && (
+            <button
+              className="btn btn-outline flex items-center text-red-400 border-red-400 hover:bg-red-900/50"
+              onClick={() => handleControl('stop')}
+            >
+              <Square className="w-4 h-4 mr-2" />
+              结束
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-hidden">
+        <ExecutionChat messages={displayMessages} status={streamStatus} error={streamError} />
+      </div>
+
+      <div className="px-4 py-2 border-t border-gray-700 bg-gray-800/50">
+        <div className="flex items-center justify-between text-sm text-gray-400 mb-1">
+          <span>Token 使用</span>
+          <span>
+            {execution.tokens_used.toLocaleString()} / {execution.tokens_budget.toLocaleString()}
+          </span>
+        </div>
+        <div className="w-full bg-gray-700 rounded-full h-2">
+          <div
+            className="bg-primary-500 h-2 rounded-full transition-all"
+            style={{ width: `${Math.min(100, (execution.tokens_used / execution.tokens_budget) * 100)}%` }}
+          />
+        </div>
+      </div>
+
+      {execution.status === 'completed' && (
+        <div className="p-4 border-t border-gray-700" />
+      )}
+
+      {execution.status !== 'failed' && (
+        <div className="p-4 border-t border-gray-700">
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              className="input flex-1"
+              placeholder="在讨论中输入关键词/追问（运行中会自动尝试暂停）..."
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey && chatInput.trim()) {
+                  e.preventDefault()
+                  void sendFollowup()
+                }
+              }}
+              disabled={!executionId || isSendingFollowup}
+            />
+            <button
+              className="btn btn-primary"
+              disabled={!chatInput.trim() || !executionId || isSendingFollowup}
+              onClick={() => void sendFollowup()}
+              title="发送追问"
+            >
+              <Send className="w-5 h-5" />
+            </button>
+          </div>
+          <p className="text-xs text-gray-500 mt-2">
+            提示：后端只允许在暂停/完成状态处理追问；运行中会先请求暂停（可能需要等待当前一步完成）。
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
