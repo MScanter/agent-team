@@ -94,6 +94,33 @@ export function useExecutionStream(executionId: string | null) {
       try {
         const data: StreamEvent = JSON.parse(event.data)
 
+        if (data.event_type === 'await_input') {
+          const msg: ExecutionMessage = {
+            id: `${executionId}-${data.sequence}`,
+            sequence: data.sequence,
+            round: (data.data.round as number) || 0,
+            phase: (data.data.phase as string) || 'awaiting_user_input',
+            sender_type: 'system',
+            sender_id: undefined,
+            sender_name: 'system',
+            content: (data.data.message as string) || '等待你的输入',
+            content_type: 'text',
+            confidence: undefined,
+            wants_to_continue: true,
+            input_tokens: 0,
+            output_tokens: 0,
+            metadata: {},
+            created_at: new Date().toISOString(),
+          }
+          setMessages((prev) => [...prev, msg])
+
+          completedRef.current = true
+          setStatus('completed')
+          queryClient.invalidateQueries({ queryKey: ['execution', executionId] })
+          eventSource.close()
+          return
+        }
+
         if (data.event_type === 'error') {
           setError(data.data.message as string)
           setStatus('error')
@@ -104,6 +131,7 @@ export function useExecutionStream(executionId: string | null) {
         if (data.event_type === 'status') {
           const phase = (data.data.phase as string) || ''
           const statusField = (data.data.status as string) || ''
+          const hasMessage = typeof (data.data.message as unknown) === 'string' && Boolean((data.data.message as string).trim())
           const msg: ExecutionMessage = {
             id: `${executionId}-${data.sequence}`,
             sequence: data.sequence,
@@ -125,7 +153,11 @@ export function useExecutionStream(executionId: string | null) {
 
           // If backend immediately paused (e.g. awaiting user input) or returned a non-streaming status,
           // close the EventSource without showing a scary error.
-          if (phase === 'awaiting_user_input' || (statusField && !['pending', 'running'].includes(statusField))) {
+          if (
+            phase === 'awaiting_user_input' ||
+            (statusField && !['pending', 'running'].includes(statusField)) ||
+            (statusField && !hasMessage)
+          ) {
             completedRef.current = true
             setStatus('completed')
             queryClient.invalidateQueries({ queryKey: ['execution', executionId] })

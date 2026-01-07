@@ -11,6 +11,7 @@ from app.agents.base import AgentConfig, AgentInstance
 from app.orchestration import (
     OrchestrationState,
     OrchestrationEvent,
+    Opinion,
     RoundtableOrchestrator,
     PipelineOrchestrator,
     DebateOrchestrator,
@@ -322,15 +323,39 @@ class ExecutionService:
         execution["status"] = "running"
         self.store.touch(execution)
 
+        shared_state = execution.get("shared_state") or {}
+        base_topic = (shared_state.get("topic") or execution.get("initial_input") or "").strip()
         state = OrchestrationState(
-            topic=input_text,
-            round=execution.get("current_round", 0),
+            topic=base_topic,
+            round=int(shared_state.get("round") or execution.get("current_round", 0)),
             tokens_used=execution.get("tokens_used", 0),
             tokens_budget=execution.get("tokens_budget", 200000),
             cost=execution.get("cost", 0.0),
             cost_budget=execution.get("cost_budget", 10.0),
-            summary=(execution.get("shared_state") or {}).get("summary", ""),
+            summary=shared_state.get("summary", ""),
         )
+        if isinstance(shared_state.get("opinions"), list):
+            try:
+                state.opinions = [
+                    Opinion(
+                        agent_id=o.get("agent_id"),
+                        agent_name=o.get("agent_name"),
+                        content=o.get("content") or "",
+                        round=int(o.get("round") or 0),
+                        phase=o.get("phase") or "unknown",
+                        confidence=float(o.get("confidence") or 0.8),
+                        wants_to_continue=bool(o.get("wants_to_continue", True)),
+                    )
+                    for o in shared_state.get("opinions")
+                    if isinstance(o, dict) and o.get("agent_id") and o.get("agent_name")
+                ]
+            except Exception:
+                state.opinions = []
+        if isinstance(shared_state.get("agent_wants_continue"), dict):
+            try:
+                state.agent_wants_continue = {str(k): bool(v) for k, v in shared_state["agent_wants_continue"].items()}
+            except Exception:
+                pass
         coordinator_llm = None
         if llm_config and llm_config.get("default"):
             from app.services.llm_service import get_provider_for_model_config
@@ -349,6 +374,12 @@ class ExecutionService:
             async for event in orchestrator.handle_followup(input_text, agent_instances, state, target_agent_id):
                 sequence += 1
                 event.sequence = sequence
+
+                if event.event_type == "await_input":
+                    execution["status"] = "paused"
+                    self.store.touch(execution)
+                    yield event
+                    return
 
                 if event.event_type == "done":
                     final_output = (event.data or {}).get("final_output") or (event.data or {}).get("final_summary")

@@ -31,7 +31,8 @@ class RoundtableOrchestrator(Orchestrator):
         super().__init__(config)
         self.coordinator = Coordinator(coordinator_llm)
         self._sequence = 0
-        self._max_rounds = int(self.config.get("max_rounds", 2))
+        self._interactive = bool(self.config.get("interactive", True))
+        self._max_rounds = int(self.config.get("max_rounds", 0))
 
     @property
     def mode_name(self) -> str:
@@ -59,6 +60,45 @@ class RoundtableOrchestrator(Orchestrator):
             sequence=self._next_sequence(),
         )
 
+        # Drop agents that opted out in previous rounds.
+        state.active_agent_ids = [
+            agent_id for agent_id in state.active_agent_ids if state.agent_wants_continue.get(agent_id, True)
+        ]
+        if not state.active_agent_ids:
+            state.should_terminate = True
+            state.termination_reason = "No active agents remaining"
+
+        if self._max_rounds and state.round >= self._max_rounds:
+            state.should_terminate = True
+            state.termination_reason = "Reached max rounds"
+
+        if not self.should_continue(state):
+            async for event in self._finalize(state):
+                yield event
+            return
+
+        async for event in self._run_one_round(agents, state):
+            yield event
+        yield OrchestrationEvent(
+            event_type="summary",
+            data={
+                "round": state.round,
+                "summary": state.summary,
+                "key_points": state.key_points,
+            },
+            sequence=self._next_sequence(),
+        )
+
+        # Interactive mode pauses after each round and waits for user follow-up.
+        if self._interactive:
+            yield OrchestrationEvent(
+                event_type="await_input",
+                data={"message": "等待你的下一条输入（继续讨论/补充信息/提出疑问）", "phase": "awaiting_user_input", "round": state.round},
+                sequence=self._next_sequence(),
+            )
+            return
+
+        # Batch mode: keep running until termination.
         while self.should_continue(state):
             # Drop agents that opted out in previous rounds.
             state.active_agent_ids = [
@@ -68,55 +108,13 @@ class RoundtableOrchestrator(Orchestrator):
                 state.should_terminate = True
                 state.termination_reason = "No active agents remaining"
                 break
-
-            if state.round >= self._max_rounds:
+            if self._max_rounds and state.round >= self._max_rounds:
                 state.should_terminate = True
                 state.termination_reason = "Reached max rounds"
                 break
 
-            state.start_new_round()
-
-            # Phase 1: Parallel opinions
-            state.phase = OrchestrationPhase.PARALLEL
-            yield OrchestrationEvent(
-                event_type="status",
-                data={"message": f"Round {state.round} - Parallel phase", "round": state.round},
-                sequence=self._next_sequence(),
-            )
-
-            async for event in self._parallel_phase(agents, state):
+            async for event in self._run_one_round(agents, state):
                 yield event
-
-            # Check termination after parallel phase
-            if not self.should_continue(state):
-                break
-
-            # Phase 2: Sequential responses
-            state.phase = OrchestrationPhase.SEQUENTIAL
-            yield OrchestrationEvent(
-                event_type="status",
-                data={"message": f"Round {state.round} - Response phase", "round": state.round},
-                sequence=self._next_sequence(),
-            )
-
-            async for event in self._sequential_phase(agents, state):
-                yield event
-
-            # Update summary
-            state.phase = OrchestrationPhase.SUMMARIZING
-            summary = await self.coordinator.generate_summary(
-                topic=state.topic,
-                opinions=[
-                    {"agent_name": op.agent_name, "content": op.content}
-                    for op in state.current_round_opinions
-                ],
-                previous_summary=state.summary,
-            )
-            state.summary = summary.summary_text
-            state.key_points = summary.key_points
-            state.consensus = summary.consensus
-            state.disagreements = summary.disagreements
-
             yield OrchestrationEvent(
                 event_type="summary",
                 data={
@@ -127,28 +125,59 @@ class RoundtableOrchestrator(Orchestrator):
                 sequence=self._next_sequence(),
             )
 
-        # Final summary
+        async for event in self._finalize(state):
+            yield event
+
+    async def _run_one_round(
+        self,
+        agents: list[AgentInstance],
+        state: OrchestrationState,
+    ) -> AsyncIterator[OrchestrationEvent]:
+        state.start_new_round()
+
+        state.phase = OrchestrationPhase.PARALLEL
+        yield OrchestrationEvent(
+            event_type="status",
+            data={"message": f"Round {state.round} - Parallel phase", "round": state.round, "phase": "parallel"},
+            sequence=self._next_sequence(),
+        )
+
+        # Parallel opinions
+        async for event in self._parallel_phase(agents, state):
+            yield event
+
+        # Sequential responses (optional)
+        state.phase = OrchestrationPhase.SEQUENTIAL
+        yield OrchestrationEvent(
+            event_type="status",
+            data={"message": f"Round {state.round} - Response phase", "round": state.round, "phase": "response"},
+            sequence=self._next_sequence(),
+        )
+        async for event in self._sequential_phase(agents, state):
+            yield event
+
+        # Update summary
+        state.phase = OrchestrationPhase.SUMMARIZING
+        summary = await self.coordinator.generate_summary(
+            topic=state.topic,
+            opinions=[{"agent_name": op.agent_name, "content": op.content} for op in state.current_round_opinions],
+            previous_summary=state.summary,
+        )
+        state.summary = summary.summary_text
+        state.key_points = summary.key_points
+        state.consensus = summary.consensus
+        state.disagreements = summary.disagreements
+
+    async def _finalize(self, state: OrchestrationState) -> AsyncIterator[OrchestrationEvent]:
         state.phase = OrchestrationPhase.COMPLETED
         final_summary = await self.coordinator.generate_final_summary(
             topic=state.topic,
-            all_opinions=[
-                {
-                    "agent_name": op.agent_name,
-                    "content": op.content,
-                    "round": op.round,
-                }
-                for op in state.opinions
-            ],
+            all_opinions=[{"agent_name": op.agent_name, "content": op.content, "round": op.round} for op in state.opinions],
             summary=self.coordinator._summary,
         )
-
         yield OrchestrationEvent(
             event_type="done",
-            data={
-                "final_summary": final_summary,
-                "total_rounds": state.round,
-                "tokens_used": state.tokens_used,
-            },
+            data={"final_summary": final_summary, "total_rounds": state.round, "tokens_used": state.tokens_used},
             sequence=self._next_sequence(),
         )
 
@@ -212,6 +241,8 @@ class RoundtableOrchestrator(Orchestrator):
                     "content": response.content,
                     "confidence": response.confidence,
                     "wants_to_continue": response.wants_to_continue,
+                    "round": state.round,
+                    "phase": "parallel",
                 },
                 agent_id=agent.id,
                 sequence=self._next_sequence(),
@@ -274,6 +305,7 @@ class RoundtableOrchestrator(Orchestrator):
                         "confidence": response.confidence,
                         "wants_to_continue": response.wants_to_continue,
                         "phase": "response",
+                        "round": state.round,
                     },
                     agent_id=agent.id,
                     sequence=self._next_sequence(),
@@ -302,6 +334,9 @@ class RoundtableOrchestrator(Orchestrator):
             sequence=self._next_sequence(),
         )
 
+        # Merge follow-up into topic so the next round has full context.
+        state.topic = f"{state.topic}\n\n用户输入：{followup}"
+
         # Route the follow-up
         if target_agent_id:
             # Direct to specific agent
@@ -329,52 +364,31 @@ class RoundtableOrchestrator(Orchestrator):
                 )
                 yield OrchestrationEvent(
                     event_type="summary",
-                    data={"summary": summary},
+                    data={"summary": summary, "phase": "followup"},
                     sequence=self._next_sequence(),
                 )
+                if self._interactive:
+                    yield OrchestrationEvent(
+                        event_type="await_input",
+                        data={"message": "等待你的下一条输入（继续讨论/补充信息/提出疑问）", "phase": "awaiting_user_input"},
+                        sequence=self._next_sequence(),
+                    )
                 return
 
             target_agents = [a for a in agents if a.id in routing.get("agent_ids", [])]
 
-        # Get responses from target agents
-        state.start_new_round()
-        for agent in target_agents:
-            try:
-                response = await agent.generate_opinion(
-                    topic=followup,
-                    discussion_summary=state.summary,
-                    recent_opinions=[],
-                    phase="initial",
-                )
-
-                opinion = Opinion(
-                    agent_id=agent.id,
-                    agent_name=agent.name,
-                    content=response.content,
-                    round=state.round,
-                    phase="followup",
-                    confidence=response.confidence,
-                    wants_to_continue=response.wants_to_continue,
-                    input_tokens=response.metadata.get("input_tokens", 0),
-                    output_tokens=response.metadata.get("output_tokens", 0),
-                )
-                state.add_opinion(opinion)
-
-                yield OrchestrationEvent(
-                    event_type="opinion",
-                    data={
-                        "agent_name": agent.name,
-                        "content": response.content,
-                        "phase": "followup",
-                    },
-                    agent_id=agent.id,
-                    sequence=self._next_sequence(),
-                )
-
-            except Exception as e:
-                yield OrchestrationEvent(
-                    event_type="error",
-                    data={"message": f"Agent {agent.name} failed: {str(e)}"},
-                    agent_id=agent.id,
-                    sequence=self._next_sequence(),
-                )
+        # Interactive follow-up: run one more discussion round.
+        state.active_agent_ids = [a.id for a in target_agents] if target_agents else state.active_agent_ids
+        async for event in self._run_one_round(agents, state):
+            yield event
+        yield OrchestrationEvent(
+            event_type="summary",
+            data={"round": state.round, "summary": state.summary, "key_points": state.key_points},
+            sequence=self._next_sequence(),
+        )
+        if self._interactive:
+            yield OrchestrationEvent(
+                event_type="await_input",
+                data={"message": "等待你的下一条输入（继续讨论/补充信息/提出疑问）", "phase": "awaiting_user_input", "round": state.round},
+                sequence=self._next_sequence(),
+            )

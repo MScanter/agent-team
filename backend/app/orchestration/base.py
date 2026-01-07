@@ -144,6 +144,7 @@ class OrchestrationState:
             "key_points": self.key_points,
             "consensus": self.consensus,
             "disagreements": self.disagreements,
+            "agent_wants_continue": self.agent_wants_continue,
             "tokens_used": self.tokens_used,
             "tokens_budget": self.tokens_budget,
             "cost": self.cost,

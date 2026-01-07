@@ -1,7 +1,7 @@
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Send, Pause, Play, Square } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useExecution, useCreateExecution, useControlExecution, useExecutionStream } from '@/hooks'
+import { useExecution, useCreateExecution, useControlExecution, useDeleteExecution, useExecutionStream } from '@/hooks'
 import { ExecutionChat } from '@/components/Execution'
 import { buildExecutionLLMConfig } from '@/services/modelConfigStore'
 
@@ -21,9 +21,10 @@ export default function ExecutionPage() {
   const { data: execution, isLoading } = useExecution(executionId || '')
   const createExecution = useCreateExecution()
   const controlExecution = useControlExecution()
+  const deleteExecution = useDeleteExecution()
   const llm = buildExecutionLLMConfig()
   const { messages, status: streamStatus, error: streamError } = useExecutionStream(
-    execution?.status === 'running' || execution?.status === 'pending' ? executionId : null
+    execution?.status === 'pending' ? executionId : null
   )
 
   useEffect(() => {
@@ -57,7 +58,7 @@ export default function ExecutionPage() {
         const result = await createExecution.mutateAsync({
           team_id: teamId,
           input: '',
-          title: '讨论',
+          title: undefined,
           llm,
         })
         setExecutionId(result.id)
@@ -73,6 +74,51 @@ export default function ExecutionPage() {
   const handleControl = async (action: string) => {
     if (!executionId) return
     await controlExecution.mutateAsync({ id: executionId, action })
+  }
+
+  const handleNewDiscussion = async () => {
+    const resolvedTeamId = teamId || execution?.team_id
+    if (!resolvedTeamId) {
+      navigate('/teams')
+      return
+    }
+    if (!llm) {
+      setStartError('需要先在“API配置”里创建默认配置并填写 API Key。')
+      return
+    }
+
+    setStartError(null)
+    try {
+      const result = await createExecution.mutateAsync({
+        team_id: resolvedTeamId,
+        input: '',
+        title: undefined,
+        llm,
+      })
+      setClientMessages([])
+      setExecutionId(result.id)
+      navigate(`/execution/${result.id}?team=${resolvedTeamId}`)
+    } catch (e: any) {
+      const detail = e?.response?.data?.detail
+      setStartError(typeof detail === 'string' ? detail : detail ? JSON.stringify(detail) : e?.message || '创建执行失败')
+    }
+  }
+
+  const handleDeleteDiscussion = async () => {
+    if (!executionId) return
+    if (!confirm('确定删除当前讨论？删除后无法恢复。')) return
+
+    try {
+      await deleteExecution.mutateAsync(executionId)
+      const last = localStorage.getItem('agent-team:lastExecutionId')
+      if (last === executionId) localStorage.removeItem('agent-team:lastExecutionId')
+      setClientMessages([])
+      setExecutionId(null)
+      navigate('/teams')
+    } catch (e: any) {
+      const detail = e?.response?.data?.detail
+      setStartError(typeof detail === 'string' ? detail : detail ? JSON.stringify(detail) : e?.message || '删除失败')
+    }
   }
 
   const apiBase = useMemo(() => {
@@ -174,6 +220,11 @@ export default function ExecutionPage() {
             continue
           }
 
+          if (evt.event_type === 'await_input') {
+            pushSystem((evt.data && evt.data.message) || '等待你的输入')
+            continue
+          }
+
           if (evt.event_type === 'opinion' || evt.event_type === 'summary' || evt.event_type === 'done') {
             const msg = {
               id: `${executionId}-fu-${Date.now()}-${Math.random().toString(16).slice(2)}`,
@@ -249,7 +300,22 @@ export default function ExecutionPage() {
   if (!execution) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <div className="text-gray-400">执行不存在</div>
+        <div className="card w-full max-w-lg">
+          <h2 className="text-xl font-bold text-white mb-2">讨论不存在</h2>
+          <p className="text-sm text-gray-400 mb-4">可能已被删除，或本地记录的 ID 已失效。</p>
+          <button
+            className="btn btn-secondary w-full mb-2"
+            onClick={() => {
+              localStorage.removeItem('agent-team:lastExecutionId')
+              navigate('/teams')
+            }}
+          >
+            去选择团队
+          </button>
+          <button className="btn btn-primary w-full" onClick={() => navigate('/execution')}>
+            返回讨论入口
+          </button>
+        </div>
       </div>
     )
   }
@@ -261,7 +327,7 @@ export default function ExecutionPage() {
     <div className="flex flex-col h-screen">
       <div className="flex items-center justify-between p-4 border-b border-gray-700">
         <div>
-          <h1 className="text-xl font-bold text-white">{execution.title || '讨论'}</h1>
+          <h1 className="text-xl font-bold text-white">讨论</h1>
           <p className="text-sm text-gray-400">
             状态: {execution.status} | 轮次: {execution.current_round}
             {streamStatus === 'connecting' && ' | 连接中...'}
@@ -269,6 +335,10 @@ export default function ExecutionPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <button className="btn btn-secondary" onClick={() => void handleNewDiscussion()} disabled={!llm}>
+            新讨论
+          </button>
+
           {execution.status === 'running' ? (
             <button className="btn btn-secondary flex items-center" onClick={() => handleControl('pause')}>
               <Pause className="w-4 h-4 mr-2" />
@@ -290,6 +360,15 @@ export default function ExecutionPage() {
               结束
             </button>
           )}
+
+          <button
+            className="btn btn-outline flex items-center text-red-400 border-red-400 hover:bg-red-900/50"
+            onClick={() => void handleDeleteDiscussion()}
+            disabled={deleteExecution.isPending}
+            title="删除当前讨论"
+          >
+            删除
+          </button>
         </div>
       </div>
 
