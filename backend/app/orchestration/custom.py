@@ -55,7 +55,7 @@ class CustomOrchestrator(Orchestrator):
 
         yield OrchestrationEvent(
             event_type="status",
-            data={"message": "Custom workflow started", "phase": "initializing"},
+            data={"message": "自定义流程已开始", "phase": "initializing"},
             sequence=self._next_sequence(),
         )
 
@@ -362,7 +362,7 @@ class CustomOrchestrator(Orchestrator):
         # should pause the execution and let the client send a follow-up to continue.
         yield OrchestrationEvent(
             event_type="await_input",
-            data={"message": "Waiting for user input", "node_id": node["id"]},
+            data={"message": "等待用户输入", "node_id": node["id"]},
             sequence=self._next_sequence(),
         )
 
@@ -389,7 +389,7 @@ class CustomOrchestrator(Orchestrator):
         # For custom workflows, we'll add a special follow-up node
         yield OrchestrationEvent(
             event_type="status",
-            data={"message": "Processing follow-up in custom workflow"},
+            data={"message": "正在处理你的输入（自定义流程）"},
             sequence=self._next_sequence(),
         )
         

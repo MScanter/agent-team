@@ -2,7 +2,7 @@
 Orchestration module for team collaboration modes.
 """
 
-from app.orchestration.base import Orchestrator, OrchestrationState, OrchestrationEvent, OrchestrationPhase
+from app.orchestration.base import Orchestrator, OrchestrationState, OrchestrationEvent, OrchestrationPhase, Opinion
 from app.orchestration.roundtable import RoundtableOrchestrator
 from app.orchestration.pipeline import PipelineOrchestrator
 from app.orchestration.debate import DebateOrchestrator
@@ -13,6 +13,7 @@ __all__ = [
     "OrchestrationState",
     "OrchestrationEvent",
     "OrchestrationPhase",
+    "Opinion",
     "RoundtableOrchestrator",
     "PipelineOrchestrator",
     "DebateOrchestrator",

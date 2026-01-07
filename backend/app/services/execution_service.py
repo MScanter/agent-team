@@ -221,7 +221,7 @@ class ExecutionService:
                     sequence += 1
                     yield OrchestrationEvent(
                         event_type="status",
-                        data={"message": "Paused", "phase": "paused"},
+                        data={"message": "已暂停", "phase": "paused"},
                         sequence=sequence,
                     )
                     while execution.get("status") == "paused":
@@ -231,7 +231,7 @@ class ExecutionService:
                     sequence += 1
                     yield OrchestrationEvent(
                         event_type="status",
-                        data={"message": "Resumed", "phase": "resumed"},
+                        data={"message": "已继续", "phase": "resumed"},
                         sequence=sequence,
                     )
 
@@ -371,6 +371,21 @@ class ExecutionService:
         sequence = 0
         final_output: Optional[str] = None
         try:
+            # Persist and emit the user's message first so ordering is stable.
+            user_msg = self._save_user_message(execution_id, input_text, state.round)
+            sequence += 1
+            yield OrchestrationEvent(
+                event_type="user",
+                data={
+                    "content": input_text,
+                    "phase": "user",
+                    "round": state.round,
+                    "message_id": user_msg["id"],
+                    "message_sequence": user_msg["sequence"],
+                },
+                sequence=sequence,
+            )
+
             async for event in orchestrator.handle_followup(input_text, agent_instances, state, target_agent_id):
                 sequence += 1
                 event.sequence = sequence
@@ -481,3 +496,34 @@ class ExecutionService:
         }
         self.store.touch(msg, created=True)
         messages.append(msg)
+
+        # Attach stable identifiers so streaming clients can de-dup against persisted messages.
+        if isinstance(event.data, dict):
+            event.data["message_id"] = msg["id"]
+            event.data["message_sequence"] = msg["sequence"]
+
+    def _save_user_message(self, execution_id: str, content: str, round_num: int) -> dict:
+        messages = self.store.execution_messages.setdefault(execution_id, [])
+        max_seq = max((m.get("sequence", 0) for m in messages), default=0)
+
+        msg = {
+            "id": self.store.new_id(),
+            "sequence": max_seq + 1,
+            "round": round_num,
+            "phase": "user",
+            "sender_type": "user",
+            "sender_id": None,
+            "sender_name": "you",
+            "content": content,
+            "content_type": "text",
+            "responding_to": None,
+            "target_agent_id": None,
+            "confidence": None,
+            "wants_to_continue": True,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "message_metadata": {},
+        }
+        self.store.touch(msg, created=True)
+        messages.append(msg)
+        return msg

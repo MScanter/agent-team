@@ -94,10 +94,32 @@ export function useExecutionStream(executionId: string | null) {
       try {
         const data: StreamEvent = JSON.parse(event.data)
 
+        if (data.event_type === 'user') {
+          const msg: ExecutionMessage = {
+            id: (data.data.message_id as string) || `${executionId}-${data.sequence}`,
+            sequence: (data.data.message_sequence as number) || data.sequence,
+            round: (data.data.round as number) || 0,
+            phase: (data.data.phase as string) || 'user',
+            sender_type: 'user',
+            sender_id: undefined,
+            sender_name: 'you',
+            content: (data.data.content as string) || '',
+            content_type: 'text',
+            confidence: undefined,
+            wants_to_continue: true,
+            input_tokens: 0,
+            output_tokens: 0,
+            metadata: {},
+            created_at: new Date().toISOString(),
+          }
+          setMessages((prev) => [...prev, msg])
+          return
+        }
+
         if (data.event_type === 'await_input') {
           const msg: ExecutionMessage = {
-            id: `${executionId}-${data.sequence}`,
-            sequence: data.sequence,
+            id: (data.data.message_id as string) || `${executionId}-${data.sequence}`,
+            sequence: (data.data.message_sequence as number) || data.sequence,
             round: (data.data.round as number) || 0,
             phase: (data.data.phase as string) || 'awaiting_user_input',
             sender_type: 'system',
@@ -132,6 +154,13 @@ export function useExecutionStream(executionId: string | null) {
           const phase = (data.data.phase as string) || ''
           const statusField = (data.data.status as string) || ''
           const hasMessage = typeof (data.data.message as unknown) === 'string' && Boolean((data.data.message as string).trim())
+          if (!hasMessage && statusField) {
+            completedRef.current = true
+            setStatus('completed')
+            queryClient.invalidateQueries({ queryKey: ['execution', executionId] })
+            eventSource.close()
+            return
+          }
           const msg: ExecutionMessage = {
             id: `${executionId}-${data.sequence}`,
             sequence: data.sequence,
@@ -171,8 +200,8 @@ export function useExecutionStream(executionId: string | null) {
             (data.data.phase as string) ||
             (typeof data.data.stage === 'number' ? `stage_${data.data.stage}` : data.event_type)
           const msg: ExecutionMessage = {
-            id: `${executionId}-${data.sequence}`,
-            sequence: data.sequence,
+            id: (data.data.message_id as string) || `${executionId}-${data.sequence}`,
+            sequence: (data.data.message_sequence as number) || data.sequence,
             round: (data.data.round as number) || 0,
             phase,
             sender_type: data.agent_id ? 'agent' : 'system',

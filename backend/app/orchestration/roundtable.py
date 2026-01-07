@@ -56,7 +56,7 @@ class RoundtableOrchestrator(Orchestrator):
 
         yield OrchestrationEvent(
             event_type="status",
-            data={"message": "Discussion started", "phase": "initializing"},
+            data={"message": "讨论已开始", "phase": "initializing"},
             sequence=self._next_sequence(),
         )
 
@@ -138,7 +138,7 @@ class RoundtableOrchestrator(Orchestrator):
         state.phase = OrchestrationPhase.PARALLEL
         yield OrchestrationEvent(
             event_type="status",
-            data={"message": f"Round {state.round} - Parallel phase", "round": state.round, "phase": "parallel"},
+            data={"message": f"第 {state.round} 轮：并行发言", "round": state.round, "phase": "parallel"},
             sequence=self._next_sequence(),
         )
 
@@ -150,7 +150,7 @@ class RoundtableOrchestrator(Orchestrator):
         state.phase = OrchestrationPhase.SEQUENTIAL
         yield OrchestrationEvent(
             event_type="status",
-            data={"message": f"Round {state.round} - Response phase", "round": state.round, "phase": "response"},
+            data={"message": f"第 {state.round} 轮：互相回应", "round": state.round, "phase": "response"},
             sequence=self._next_sequence(),
         )
         async for event in self._sequential_phase(agents, state):
@@ -330,7 +330,7 @@ class RoundtableOrchestrator(Orchestrator):
 
         yield OrchestrationEvent(
             event_type="status",
-            data={"message": "Processing follow-up"},
+            data={"message": "正在处理你的输入"},
             sequence=self._next_sequence(),
         )
 

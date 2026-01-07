@@ -132,26 +132,6 @@ export default function ExecutionPage() {
 
     const text = chatInput.trim()
     setChatInput('')
-    setClientMessages((prev) => [
-      ...prev,
-      {
-        id: `${executionId}-user-${Date.now()}`,
-        sequence: 0,
-        round: execution.current_round || 0,
-        phase: 'user',
-        sender_type: 'user',
-        sender_id: undefined,
-        sender_name: 'you',
-        content: text,
-        content_type: 'text',
-        confidence: undefined,
-        wants_to_continue: true,
-        input_tokens: 0,
-        output_tokens: 0,
-        metadata: {},
-        created_at: new Date().toISOString(),
-      },
-    ])
 
     if (execution.status === 'running') {
       await handleControl('pause')
@@ -225,15 +205,22 @@ export default function ExecutionPage() {
             continue
           }
 
-          if (evt.event_type === 'opinion' || evt.event_type === 'summary' || evt.event_type === 'done') {
+          if (evt.event_type === 'user' || evt.event_type === 'opinion' || evt.event_type === 'summary' || evt.event_type === 'done') {
+            const senderType =
+              evt.event_type === 'user' ? 'user' : evt.agent_id ? 'agent' : 'system'
             const msg = {
-              id: `${executionId}-fu-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-              sequence: 0,
+              id:
+                (evt.data && (evt.data.message_id || evt.data.id)) ||
+                `${executionId}-fu-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+              sequence: (evt.data && evt.data.message_sequence) || evt.sequence || 0,
               round: (evt.data && evt.data.round) || 0,
               phase: (evt.data && evt.data.phase) || evt.event_type,
-              sender_type: evt.agent_id ? 'agent' : 'system',
+              sender_type: senderType,
               sender_id: evt.agent_id,
-              sender_name: (evt.data && evt.data.agent_name) || (evt.agent_id ? undefined : 'system'),
+              sender_name:
+                senderType === 'user'
+                  ? 'you'
+                  : (evt.data && evt.data.agent_name) || (evt.agent_id ? undefined : 'system'),
               content:
                 (evt.data && evt.data.content) ||
                 (evt.data && evt.data.summary) ||
@@ -320,8 +307,29 @@ export default function ExecutionPage() {
     )
   }
 
-  const baseMessages = messages.length > 0 ? messages : execution.recent_messages
-  const displayMessages = [...baseMessages, ...clientMessages]
+  const baseMessages = useMemo(() => {
+    const merged = new Map<string, any>()
+    for (const m of execution.recent_messages || []) merged.set(m.id, m)
+    for (const m of messages || []) merged.set(m.id, m)
+    return Array.from(merged.values()).sort((a: any, b: any) => {
+      const sa = Number(a.sequence || 0)
+      const sb = Number(b.sequence || 0)
+      if (sa !== sb) return sa - sb
+      return String(a.created_at || '').localeCompare(String(b.created_at || ''))
+    })
+  }, [execution.recent_messages, messages])
+
+  const displayMessages = useMemo(() => {
+    const merged = new Map<string, any>()
+    for (const m of baseMessages) merged.set(m.id, m)
+    for (const m of clientMessages) merged.set(m.id, m)
+    return Array.from(merged.values()).sort((a: any, b: any) => {
+      const sa = Number(a.sequence || 0)
+      const sb = Number(b.sequence || 0)
+      if (sa !== sb) return sa - sb
+      return String(a.created_at || '').localeCompare(String(b.created_at || ''))
+    })
+  }, [baseMessages, clientMessages])
 
   return (
     <div className="flex flex-col h-screen">
