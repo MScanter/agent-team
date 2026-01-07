@@ -61,7 +61,8 @@ class CustomOrchestrator(Orchestrator):
 
         # Execute the workflow
         try:
-            await self._execute_workflow(agents, state)
+            async for event in self._execute_workflow(agents, state):
+                yield event
         except Exception as e:
             state.phase = OrchestrationPhase.FAILED
             state.error = str(e)
@@ -86,26 +87,27 @@ class CustomOrchestrator(Orchestrator):
         self,
         agents: list[AgentInstance],
         state: OrchestrationState,
-    ):
+    ) -> AsyncIterator[OrchestrationEvent]:
         """Execute the custom workflow."""
         nodes = self.workflow.get("nodes", [])
         edges = self.workflow.get("edges", [])
-        
+
         # Find start nodes (nodes with no incoming edges)
         node_ids = [node["id"] for node in nodes]
         target_ids = [edge["target"] for edge in edges]
         start_nodes = [node_id for node_id in node_ids if node_id not in target_ids]
-        
+
         # Execute workflow starting from start nodes
         for node_id in start_nodes:
-            await self._execute_node(node_id, agents, state)
+            async for event in self._execute_node(node_id, agents, state):
+                yield event
 
     async def _execute_node(
         self,
         node_id: str,
         agents: list[AgentInstance],
         state: OrchestrationState,
-    ):
+    ) -> AsyncIterator[OrchestrationEvent]:
         """Execute a single node in the workflow."""
         nodes = {node["id"]: node for node in self.workflow.get("nodes", [])}
         node = nodes.get(node_id)
@@ -115,19 +117,25 @@ class CustomOrchestrator(Orchestrator):
         
         node_type = node.get("type")
         config = node.get("config", {})
-        
+
         if node_type == "agent":
-            await self._execute_agent_node(node, agents, state)
+            async for event in self._execute_agent_node(node, agents, state):
+                yield event
         elif node_type == "condition":
-            await self._execute_condition_node(node, agents, state)
+            async for event in self._execute_condition_node(node, agents, state):
+                yield event
         elif node_type == "parallel":
-            await self._execute_parallel_node(node, agents, state)
+            async for event in self._execute_parallel_node(node, agents, state):
+                yield event
         elif node_type == "merge":
-            await self._execute_merge_node(node, agents, state)
+            async for event in self._execute_merge_node(node, agents, state):
+                yield event
         elif node_type == "loop":
-            await self._execute_loop_node(node, agents, state)
+            async for event in self._execute_loop_node(node, agents, state):
+                yield event
         elif node_type == "user_input":
-            await self._execute_user_input_node(node, agents, state)
+            async for event in self._execute_user_input_node(node, agents, state):
+                yield event
         else:
             raise ValueError(f"Unknown node type: {node_type}")
 
@@ -136,7 +144,7 @@ class CustomOrchestrator(Orchestrator):
         node: Dict[str, Any],
         agents: list[AgentInstance],
         state: OrchestrationState,
-    ):
+    ) -> AsyncIterator[OrchestrationEvent]:
         """Execute an agent node."""
         config = node.get("config", {})
         agent_id = config.get("agent_id")
@@ -177,7 +185,7 @@ class CustomOrchestrator(Orchestrator):
         
         # Store result for potential use by other nodes
         self.node_results[node["id"]] = response.content
-        
+
         yield OrchestrationEvent(
             event_type="opinion",
             data={
@@ -190,16 +198,17 @@ class CustomOrchestrator(Orchestrator):
             agent_id=agent.id,
             sequence=self._next_sequence(),
         )
-        
+
         # Follow outgoing edges
-        await self._follow_outgoing_edges(node["id"], agents, state)
+        async for event in self._follow_outgoing_edges(node["id"], agents, state):
+            yield event
 
     async def _execute_condition_node(
         self,
         node: Dict[str, Any],
         agents: list[AgentInstance],
         state: OrchestrationState,
-    ):
+    ) -> AsyncIterator[OrchestrationEvent]:
         """Execute a condition node."""
         config = node.get("config", {})
         condition = config.get("condition", "")
@@ -212,9 +221,11 @@ class CustomOrchestrator(Orchestrator):
         edges = [edge for edge in self.workflow.get("edges", []) if edge["source"] == node["id"]]
         for edge in edges:
             if edge.get("condition") == "true" and result:
-                await self._execute_node(edge["target"], agents, state)
+                async for event in self._execute_node(edge["target"], agents, state):
+                    yield event
             elif edge.get("condition") == "false" and not result:
-                await self._execute_node(edge["target"], agents, state)
+                async for event in self._execute_node(edge["target"], agents, state):
+                    yield event
 
     def _evaluate_condition(self, condition: str, state: OrchestrationState) -> bool:
         """Evaluate a condition based on state."""
@@ -233,7 +244,7 @@ class CustomOrchestrator(Orchestrator):
         node: Dict[str, Any],
         agents: list[AgentInstance],
         state: OrchestrationState,
-    ):
+    ) -> AsyncIterator[OrchestrationEvent]:
         """Execute a parallel node."""
         config = node.get("config", {})
         agent_ids = config.get("agent_ids", [])
@@ -295,25 +306,27 @@ class CustomOrchestrator(Orchestrator):
                 )
         
         # Follow outgoing edges
-        await self._follow_outgoing_edges(node["id"], agents, state)
+        async for event in self._follow_outgoing_edges(node["id"], agents, state):
+            yield event
 
     async def _execute_merge_node(
         self,
         node: Dict[str, Any],
         agents: list[AgentInstance],
         state: OrchestrationState,
-    ):
+    ) -> AsyncIterator[OrchestrationEvent]:
         """Execute a merge node."""
         # A merge node simply consolidates inputs from multiple branches
         # In this simplified version, we just continue to the next nodes
-        await self._follow_outgoing_edges(node["id"], agents, state)
+        async for event in self._follow_outgoing_edges(node["id"], agents, state):
+            yield event
 
     async def _execute_loop_node(
         self,
         node: Dict[str, Any],
         agents: list[AgentInstance],
         state: OrchestrationState,
-    ):
+    ) -> AsyncIterator[OrchestrationEvent]:
         """Execute a loop node."""
         config = node.get("config", {})
         max_iterations = config.get("max_iterations", 5)
@@ -322,8 +335,9 @@ class CustomOrchestrator(Orchestrator):
         iteration = 0
         while iteration < max_iterations:
             # Execute the loop body (connected to this node)
-            await self._follow_outgoing_edges(node["id"], agents, state)
-            
+            async for event in self._follow_outgoing_edges(node["id"], agents, state):
+                yield event
+
             # Check if we should continue
             if condition == "continue":
                 should_continue = True
@@ -334,7 +348,7 @@ class CustomOrchestrator(Orchestrator):
             
             if not should_continue:
                 break
-                
+
             iteration += 1
 
     async def _execute_user_input_node(
@@ -342,28 +356,27 @@ class CustomOrchestrator(Orchestrator):
         node: Dict[str, Any],
         agents: list[AgentInstance],
         state: OrchestrationState,
-    ):
+    ) -> AsyncIterator[OrchestrationEvent]:
         """Execute a user input node."""
-        # In a real implementation, this would pause execution and wait for user input
-        # For now, we'll just continue to the next nodes
+        # This project handles follow-ups via a separate endpoint; requesting input here
+        # should pause the execution and let the client send a follow-up to continue.
         yield OrchestrationEvent(
-            event_type="status",
+            event_type="await_input",
             data={"message": "Waiting for user input", "node_id": node["id"]},
             sequence=self._next_sequence(),
         )
-        
-        await self._follow_outgoing_edges(node["id"], agents, state)
 
     async def _follow_outgoing_edges(
         self,
         node_id: str,
         agents: list[AgentInstance],
         state: OrchestrationState,
-    ):
+    ) -> AsyncIterator[OrchestrationEvent]:
         """Follow outgoing edges from a node."""
         edges = [edge for edge in self.workflow.get("edges", []) if edge["source"] == node_id]
         for edge in edges:
-            await self._execute_node(edge["target"], agents, state)
+            async for event in self._execute_node(edge["target"], agents, state):
+                yield event
 
     async def handle_followup(
         self,

@@ -6,6 +6,7 @@ const navItems = [
   { path: '/', label: '首页', icon: Home },
   { path: '/agents', label: 'Agents', icon: Bot },
   { path: '/teams', label: '团队', icon: Users },
+  { path: '/execution', label: '讨论', icon: Play },
   { path: '/models', label: 'API配置', icon: Settings },
 ]
 
@@ -24,7 +25,10 @@ export default function Layout() {
         <nav className="mt-6 px-4">
           {navItems.map((item) => {
             const Icon = item.icon
-            const isActive = location.pathname === item.path
+            const isActive =
+              item.path === '/'
+                ? location.pathname === '/'
+                : location.pathname === item.path || location.pathname.startsWith(`${item.path}/`)
 
             return (
               <Link

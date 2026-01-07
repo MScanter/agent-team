@@ -101,7 +101,7 @@ class TeamService:
             "members": members,
         }
         self.store.touch(record, created=True)
-        self.store.teams[team_id] = record
+        self.store.upsert_team(record)
         return record
 
     def update(self, team_id: str, user_id: str, data: TeamUpdate) -> Optional[dict]:
@@ -119,13 +119,14 @@ class TeamService:
             team[field] = value
 
         self.store.touch(team)
+        self.store.upsert_team(team)
         return team
 
     def delete(self, team_id: str, user_id: str) -> bool:
         team = self.get(team_id, user_id)
         if not team or team.get("user_id") != user_id:
             return False
-        self.store.teams.pop(team_id, None)
+        self.store.delete_team(team_id)
         return True
 
     def add_member(self, team_id: str, user_id: str, data: TeamMemberCreate) -> Optional[dict]:
@@ -158,6 +159,7 @@ class TeamService:
         members.sort(key=lambda m: m.get("position", 0))
         team["members"] = members
         self.store.touch(team)
+        self.store.upsert_team(team)
         return record
 
     def remove_member(self, team_id: str, agent_id: str, user_id: str) -> bool:
@@ -172,6 +174,7 @@ class TeamService:
             return False
         team["members"] = members
         self.store.touch(team)
+        self.store.upsert_team(team)
         return True
 
     def reorder_members(self, team_id: str, user_id: str, agent_ids: list[str]) -> bool:
@@ -195,6 +198,7 @@ class TeamService:
 
         team["members"] = sorted(members, key=lambda m: m.get("position", 0))
         self.store.touch(team)
+        self.store.upsert_team(team)
         return True
 
     def duplicate(self, team_id: str, user_id: str, new_name: Optional[str] = None) -> Optional[dict]:
@@ -223,7 +227,7 @@ class TeamService:
             "members": sorted(members_copy, key=lambda m: m.get("position", 0)),
         }
         self.store.touch(record, created=True)
-        self.store.teams[new_id] = record
+        self.store.upsert_team(record)
         return record
 
     def increment_usage(self, team_id: str) -> None:
@@ -232,3 +236,4 @@ class TeamService:
             return
         team["usage_count"] = int(team.get("usage_count") or 0) + 1
         self.store.touch(team)
+        self.store.upsert_team(team)

@@ -31,6 +31,7 @@ class RoundtableOrchestrator(Orchestrator):
         super().__init__(config)
         self.coordinator = Coordinator(coordinator_llm)
         self._sequence = 0
+        self._max_rounds = int(self.config.get("max_rounds", 2))
 
     @property
     def mode_name(self) -> str:
@@ -59,6 +60,20 @@ class RoundtableOrchestrator(Orchestrator):
         )
 
         while self.should_continue(state):
+            # Drop agents that opted out in previous rounds.
+            state.active_agent_ids = [
+                agent_id for agent_id in state.active_agent_ids if state.agent_wants_continue.get(agent_id, True)
+            ]
+            if not state.active_agent_ids:
+                state.should_terminate = True
+                state.termination_reason = "No active agents remaining"
+                break
+
+            if state.round >= self._max_rounds:
+                state.should_terminate = True
+                state.termination_reason = "Reached max rounds"
+                break
+
             state.start_new_round()
 
             # Phase 1: Parallel opinions

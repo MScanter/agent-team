@@ -1,6 +1,6 @@
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Send, Pause, Play, Square } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useExecution, useCreateExecution, useControlExecution, useExecutionStream } from '@/hooks'
 import { ExecutionChat } from '@/components/Execution'
 import { buildExecutionLLMConfig } from '@/services/modelConfigStore'
@@ -11,13 +11,12 @@ export default function ExecutionPage() {
   const [searchParams] = useSearchParams()
   const teamId = searchParams.get('team')
 
-  const [topicInput, setTopicInput] = useState('')
   const [chatInput, setChatInput] = useState('')
   const [clientMessages, setClientMessages] = useState<any[]>([])
   const [isSendingFollowup, setIsSendingFollowup] = useState(false)
   const [startError, setStartError] = useState<string | null>(null)
   const [executionId, setExecutionId] = useState<string | null>(id || null)
-  const [showStartForm, setShowStartForm] = useState(!id && !!teamId)
+  const autoStartedRef = useRef(false)
 
   const { data: execution, isLoading } = useExecution(executionId || '')
   const createExecution = useCreateExecution()
@@ -27,25 +26,49 @@ export default function ExecutionPage() {
     execution?.status === 'running' || execution?.status === 'pending' ? executionId : null
   )
 
-  const handleStart = async () => {
-    if (!teamId) return
-    if (!llm) return
-    setStartError(null)
-    try {
-      const result = await createExecution.mutateAsync({
-        team_id: teamId,
-        input: topicInput.trim(),
-        title: (topicInput.trim() || '讨论').slice(0, 50),
-        llm,
-      })
-      setExecutionId(result.id)
-      setShowStartForm(false)
-      setTopicInput('')
-    } catch (e: any) {
-      const detail = e?.response?.data?.detail
-      setStartError(typeof detail === 'string' ? detail : detail ? JSON.stringify(detail) : e?.message || '创建执行失败')
+  useEffect(() => {
+    setExecutionId(id || null)
+  }, [id])
+
+  useEffect(() => {
+    if (executionId) {
+      localStorage.setItem('agent-team:lastExecutionId', executionId)
+      return
     }
-  }
+    if (!id && !teamId) {
+      const last = localStorage.getItem('agent-team:lastExecutionId')
+      if (last) navigate(`/execution/${last}`)
+    }
+  }, [executionId, id, teamId, navigate])
+
+  useEffect(() => {
+    // If we enter from a team (e.g. /execution?team=...), create an execution immediately
+    // so users always land in the discussion UI.
+    if (!teamId) return
+    if (id) return
+    if (executionId) return
+    if (autoStartedRef.current) return
+    if (!llm) return
+
+    autoStartedRef.current = true
+    setStartError(null)
+    void (async () => {
+      try {
+        const result = await createExecution.mutateAsync({
+          team_id: teamId,
+          input: '',
+          title: '讨论',
+          llm,
+        })
+        setExecutionId(result.id)
+        navigate(`/execution/${result.id}?team=${teamId}`)
+      } catch (e: any) {
+        autoStartedRef.current = false
+        const detail = e?.response?.data?.detail
+        setStartError(typeof detail === 'string' ? detail : detail ? JSON.stringify(detail) : e?.message || '创建执行失败')
+      }
+    })()
+  }, [createExecution, executionId, id, llm, navigate, teamId])
 
   const handleControl = async (action: string) => {
     if (!executionId) return
@@ -201,40 +224,14 @@ export default function ExecutionPage() {
     }
   }
 
-  if (showStartForm) {
+  if (!executionId) {
     return (
       <div className="flex items-center justify-center h-screen">
         <div className="card w-full max-w-lg">
-          <h2 className="text-xl font-bold text-white mb-4">开始新讨论</h2>
-          {!llm && (
-            <div className="mb-4 text-sm text-yellow-300 bg-yellow-900/30 border border-yellow-800 rounded p-3">
-              需要先在“API配置”里创建默认配置并填写 API Key。
-              <button
-                type="button"
-                className="ml-2 underline text-yellow-200 hover:text-yellow-100"
-                onClick={() => navigate('/models')}
-              >
-                去配置
-              </button>
-            </div>
-          )}
-          {startError && (
-            <div className="mb-4 text-sm text-red-300 bg-red-900/30 border border-red-800 rounded p-3">
-              创建失败：{startError}
-            </div>
-          )}
-          <textarea
-            className="input w-full h-32 mb-4"
-            placeholder="输入讨论主题或关键词（可选）..."
-            value={topicInput}
-            onChange={(e) => setTopicInput(e.target.value)}
-          />
-          <button
-            className="btn btn-primary w-full"
-            onClick={handleStart}
-            disabled={createExecution.isPending || !llm}
-          >
-            {createExecution.isPending ? '创建中...' : '开始讨论'}
+          <h2 className="text-xl font-bold text-white mb-2">讨论</h2>
+          <p className="text-sm text-gray-400 mb-4">从团队页面选择一个团队开始讨论。</p>
+          <button className="btn btn-primary w-full" onClick={() => navigate('/teams')}>
+            去选择团队
           </button>
         </div>
       </div>
@@ -321,6 +318,23 @@ export default function ExecutionPage() {
 
       {execution.status !== 'failed' && (
         <div className="p-4 border-t border-gray-700">
+          {!llm && (
+            <div className="mb-3 text-sm text-yellow-300 bg-yellow-900/30 border border-yellow-800 rounded p-3">
+              需要先在“API配置”里创建默认配置并填写 API Key。
+              <button
+                type="button"
+                className="ml-2 underline text-yellow-200 hover:text-yellow-100"
+                onClick={() => navigate('/models')}
+              >
+                去配置
+              </button>
+            </div>
+          )}
+          {startError && (
+            <div className="mb-3 text-sm text-red-300 bg-red-900/30 border border-red-800 rounded p-3">
+              创建失败：{startError}
+            </div>
+          )}
           <div className="flex items-center gap-2">
             <input
               type="text"

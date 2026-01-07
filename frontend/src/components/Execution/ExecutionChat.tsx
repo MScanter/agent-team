@@ -4,7 +4,7 @@ import type { ExecutionMessage } from '@/types'
 
 interface Props {
   messages: ExecutionMessage[]
-  status: 'idle' | 'connecting' | 'connected' | 'error'
+  status: 'idle' | 'connecting' | 'connected' | 'completed' | 'error'
   error?: string | null
 }
 

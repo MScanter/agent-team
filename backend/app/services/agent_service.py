@@ -97,7 +97,7 @@ class AgentService:
             "rating_count": 0,
         }
         self.store.touch(record, created=True)
-        self.store.agents[agent_id] = record
+        self.store.upsert_agent(record)
         return record
 
     def update(self, agent_id: str, user_id: str, data: AgentUpdate) -> Optional[dict]:
@@ -114,13 +114,14 @@ class AgentService:
 
         agent["version"] = int(agent.get("version") or 1) + 1
         self.store.touch(agent)
+        self.store.upsert_agent(agent)
         return agent
 
     def delete(self, agent_id: str, user_id: str) -> bool:
         agent = self.get(agent_id, user_id)
         if not agent or agent.get("user_id") != user_id:
             return False
-        self.store.agents.pop(agent_id, None)
+        self.store.delete_agent(agent_id)
         return True
 
     def duplicate(self, agent_id: str, user_id: str, new_name: Optional[str] = None) -> Optional[dict]:
@@ -143,7 +144,7 @@ class AgentService:
             "rating_count": 0,
         }
         self.store.touch(record, created=True)
-        self.store.agents[new_id] = record
+        self.store.upsert_agent(record)
         return record
 
     def get_templates(self, category: Optional[str] = None) -> list[dict]:
@@ -175,6 +176,7 @@ class AgentService:
 
         template["usage_count"] = int(template.get("usage_count") or 0) + 1
         self.store.touch(template)
+        self.store.upsert_agent(template)
         return agent
 
     def increment_usage(self, agent_id: str) -> None:
@@ -183,3 +185,4 @@ class AgentService:
             return
         agent["usage_count"] = int(agent.get("usage_count") or 0) + 1
         self.store.touch(agent)
+        self.store.upsert_agent(agent)

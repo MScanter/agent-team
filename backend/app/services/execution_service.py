@@ -124,6 +124,20 @@ class ExecutionService:
             )
             return
 
+        initial_input = (execution.get("initial_input") or "").strip()
+        if not initial_input:
+            execution["status"] = "paused"
+            self.store.touch(execution)
+            yield OrchestrationEvent(
+                event_type="status",
+                data={
+                    "message": "等待输入讨论主题（请输入内容后发送追问以继续）",
+                    "phase": "awaiting_user_input",
+                },
+                sequence=1,
+            )
+            return
+
         team = self.store.teams.get(execution.get("team_id"))
         if not team:
             yield OrchestrationEvent(event_type="error", data={"message": "Team not found"}, sequence=0)
@@ -171,7 +185,7 @@ class ExecutionService:
         self.store.touch(execution)
 
         state = OrchestrationState(
-            topic=execution["initial_input"],
+            topic=initial_input,
             tokens_budget=execution["tokens_budget"],
             cost_budget=execution["cost_budget"],
         )
@@ -195,6 +209,13 @@ class ExecutionService:
                 # Honor pause/stop control at event boundaries.
                 if execution.get("status") == "completed":
                     break
+                if event.event_type == "await_input":
+                    execution["status"] = "paused"
+                    self.store.touch(execution)
+                    sequence += 1
+                    event.sequence = sequence
+                    yield event
+                    return
                 if execution.get("status") == "paused":
                     sequence += 1
                     yield OrchestrationEvent(

@@ -112,7 +112,7 @@ async def create_model_config(
         "is_default": False,
     }
     store.touch(record, created=True)
-    store.model_configs[config_id] = record
+    store.upsert_model_config(record)
     return _to_response(record)
 
 
@@ -144,6 +144,7 @@ async def update_model_config(
         record[field] = value
 
     store.touch(record)
+    store.upsert_model_config(record)
     return _to_response(record)
 
 
@@ -156,7 +157,7 @@ async def delete_model_config(
     if not record or record.get("user_id") != LOCAL_USER_ID:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Model config {config_id} not found")
 
-    store.model_configs.pop(config_id, None)
+    store.delete_model_config(config_id)
     return SuccessResponse(message="Model configuration deleted successfully")
 
 
@@ -184,4 +185,3 @@ async def test_model_config(
         }
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Test failed: {str(e)}")
-

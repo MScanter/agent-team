@@ -73,10 +73,18 @@ export function useExecutionStream(executionId: string | null) {
   const queryClient = useQueryClient()
   const completedRef = useRef(false)
 
+  useEffect(() => {
+    setMessages([])
+    setStatus('idle')
+    setError(null)
+    completedRef.current = false
+  }, [executionId])
+
   const connect = useCallback(() => {
     if (!executionId) return
 
     completedRef.current = false
+    setError(null)
     setStatus('connecting')
     const eventSource = executionApi.stream(executionId)
 
@@ -94,11 +102,13 @@ export function useExecutionStream(executionId: string | null) {
         }
 
         if (data.event_type === 'status') {
+          const phase = (data.data.phase as string) || ''
+          const statusField = (data.data.status as string) || ''
           const msg: ExecutionMessage = {
             id: `${executionId}-${data.sequence}`,
             sequence: data.sequence,
             round: (data.data.round as number) || 0,
-            phase: (data.data.phase as string) || 'status',
+            phase: phase || 'status',
             sender_type: 'system',
             sender_id: undefined,
             sender_name: 'system',
@@ -112,6 +122,15 @@ export function useExecutionStream(executionId: string | null) {
             created_at: new Date().toISOString(),
           }
           setMessages((prev) => [...prev, msg])
+
+          // If backend immediately paused (e.g. awaiting user input) or returned a non-streaming status,
+          // close the EventSource without showing a scary error.
+          if (phase === 'awaiting_user_input' || (statusField && !['pending', 'running'].includes(statusField))) {
+            completedRef.current = true
+            setStatus('completed')
+            queryClient.invalidateQueries({ queryKey: ['execution', executionId] })
+            eventSource.close()
+          }
           return
         }
 

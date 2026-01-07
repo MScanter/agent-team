@@ -3,11 +3,13 @@ node_modules/
 .venv/
 __pycache__/
 *.pyc
+.pytest_cache/
 
 # Build outputs
 dist/
 build/
 *.egg-info/
+*.tsbuildinfo
 
 # IDE
 .idea/
@@ -28,7 +30,8 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 
-# Project specific
-/DEVELOPER_GUIDE.md
-/PLAN.md
-/PROJECT_PLAN.md
+# Local SQLite (dev override)
+backend/data/*.db
+backend/data/*.db-*
+backend/data/*.sqlite
+backend/data/*.sqlite-*
