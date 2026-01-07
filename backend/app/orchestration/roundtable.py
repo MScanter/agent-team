@@ -32,6 +32,9 @@ class RoundtableOrchestrator(Orchestrator):
         self.coordinator = Coordinator(coordinator_llm)
         self._sequence = 0
         self._interactive = bool(self.config.get("interactive", True))
+        self._enable_response_phase = bool(
+            self.config.get("enable_response_phase", False if self._interactive else True)
+        )
         self._max_rounds = int(self.config.get("max_rounds", 0))
 
     @property
@@ -146,15 +149,17 @@ class RoundtableOrchestrator(Orchestrator):
         async for event in self._parallel_phase(agents, state):
             yield event
 
-        # Sequential responses (optional)
-        state.phase = OrchestrationPhase.SEQUENTIAL
-        yield OrchestrationEvent(
-            event_type="status",
-            data={"message": f"第 {state.round} 轮：互相回应", "round": state.round, "phase": "response"},
-            sequence=self._next_sequence(),
-        )
-        async for event in self._sequential_phase(agents, state):
-            yield event
+        # Sequential responses (optional). In interactive mode this is off by default, because it
+        # often duplicates content and hurts user-directed chat quality.
+        if self._enable_response_phase:
+            state.phase = OrchestrationPhase.SEQUENTIAL
+            yield OrchestrationEvent(
+                event_type="status",
+                data={"message": f"第 {state.round} 轮：互相回应", "round": state.round, "phase": "response"},
+                sequence=self._next_sequence(),
+            )
+            async for event in self._sequential_phase(agents, state):
+                yield event
 
         # Update summary
         state.phase = OrchestrationPhase.SUMMARIZING

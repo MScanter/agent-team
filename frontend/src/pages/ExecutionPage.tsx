@@ -27,6 +27,31 @@ export default function ExecutionPage() {
     execution?.status === 'pending' ? executionId : null
   )
 
+  const baseMessages = useMemo(() => {
+    const merged = new Map<string, any>()
+    const recent = execution?.recent_messages || []
+    for (const m of recent) merged.set(m.id, m)
+    for (const m of messages || []) merged.set(m.id, m)
+    return Array.from(merged.values()).sort((a: any, b: any) => {
+      const sa = Number(a.sequence || 0)
+      const sb = Number(b.sequence || 0)
+      if (sa !== sb) return sa - sb
+      return String(a.created_at || '').localeCompare(String(b.created_at || ''))
+    })
+  }, [execution?.recent_messages, messages])
+
+  const displayMessages = useMemo(() => {
+    const merged = new Map<string, any>()
+    for (const m of baseMessages) merged.set(m.id, m)
+    for (const m of clientMessages) merged.set(m.id, m)
+    return Array.from(merged.values()).sort((a: any, b: any) => {
+      const sa = Number(a.sequence || 0)
+      const sb = Number(b.sequence || 0)
+      if (sa !== sb) return sa - sb
+      return String(a.created_at || '').localeCompare(String(b.created_at || ''))
+    })
+  }, [baseMessages, clientMessages])
+
   useEffect(() => {
     setExecutionId(id || null)
   }, [id])
@@ -306,30 +331,6 @@ export default function ExecutionPage() {
       </div>
     )
   }
-
-  const baseMessages = useMemo(() => {
-    const merged = new Map<string, any>()
-    for (const m of execution.recent_messages || []) merged.set(m.id, m)
-    for (const m of messages || []) merged.set(m.id, m)
-    return Array.from(merged.values()).sort((a: any, b: any) => {
-      const sa = Number(a.sequence || 0)
-      const sb = Number(b.sequence || 0)
-      if (sa !== sb) return sa - sb
-      return String(a.created_at || '').localeCompare(String(b.created_at || ''))
-    })
-  }, [execution.recent_messages, messages])
-
-  const displayMessages = useMemo(() => {
-    const merged = new Map<string, any>()
-    for (const m of baseMessages) merged.set(m.id, m)
-    for (const m of clientMessages) merged.set(m.id, m)
-    return Array.from(merged.values()).sort((a: any, b: any) => {
-      const sa = Number(a.sequence || 0)
-      const sb = Number(b.sequence || 0)
-      if (sa !== sb) return sa - sb
-      return String(a.created_at || '').localeCompare(String(b.created_at || ''))
-    })
-  }, [baseMessages, clientMessages])
 
   return (
     <div className="flex flex-col h-screen">
