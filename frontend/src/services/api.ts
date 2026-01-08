@@ -125,21 +125,12 @@ export const executionApi = {
     return data
   },
 
-  start: async (id: string): Promise<void> => {
-    await api.post(`/executions/${id}/start`)
-  },
-
   control: async (id: string, action: string, params?: Record<string, unknown>): Promise<void> => {
     await api.post(`/executions/${id}/control`, { action, params })
   },
 
   delete: async (id: string): Promise<void> => {
     await api.delete(`/executions/${id}`)
-  },
-
-  stream: (id: string): EventSource => {
-    const base = API_BASE_URL.replace(/\/$/, '')
-    return new EventSource(`${base}/executions/${id}/stream`)
   },
 }
 

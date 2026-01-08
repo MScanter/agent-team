@@ -37,11 +37,27 @@ http://localhost:8080/api
 - `POST /executions`
 - `GET /executions/{id}`
 - `GET /executions/{id}/messages`
-- `GET /executions/{id}/stream` (SSE)
 - `POST /executions/{id}/control`
-- `POST /executions/{id}/followup` (SSE)
 - `DELETE /executions/{id}`
 
+### WebSocket
+
+- `WS /executions/{id}/ws`
+
+#### Client messages
+
+- Start (optional): `{"type":"start"}`
+- Follow-up: `{"type":"followup","input":"...","target_agent_id":null}`
+- Control: `{"type":"control","action":"pause|resume|stop","params":{}}`
+- Ping: `{"type":"ping"}`
+
+#### Server events
+
+- `connected` (data: execution_id)
+- `user` (data: content, round, message_id, message_sequence)
+- `opinion` (data: content, agent_name, round, phase, message_id, message_sequence)
+- `status` (data: status or message)
+- `error` (data: message)
 ## Model Configs
 
 - `GET /models`

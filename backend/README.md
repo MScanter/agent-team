@@ -2,9 +2,9 @@
 
 This backend runs in **single-user mode** (no login).
 
-User settings are persisted locally via **SQLite**:
+User settings and executions are persisted locally via **SQLite**:
 - `agents` / `teams` / `model_configs` survive restarts
-- `executions` and `messages` are still in-memory for now
+- `executions` and `messages` also survive restarts
 
 ## Requirements
 

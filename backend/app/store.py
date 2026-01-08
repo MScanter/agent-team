@@ -130,7 +130,7 @@ class SQLiteKV:
             if row is None:
                 self._conn.execute("INSERT INTO schema_version(version) VALUES (1);")
 
-            for table in ("agents", "teams", "model_configs"):
+            for table in ("agents", "teams", "model_configs", "executions"):
                 self._conn.execute(
                     f"""
                     CREATE TABLE IF NOT EXISTS {table} (
@@ -142,6 +142,22 @@ class SQLiteKV:
                     """
                 )
 
+            self._conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS execution_messages (
+                    id TEXT PRIMARY KEY,
+                    execution_id TEXT NOT NULL,
+                    sequence INTEGER,
+                    data_json TEXT NOT NULL,
+                    created_at TEXT,
+                    updated_at TEXT
+                );
+                """
+            )
+            self._conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_execution_messages_exec_seq ON execution_messages (execution_id, sequence);"
+            )
+
     def list(self, table: str) -> list[dict[str, Any]]:
         with self._lock, self._conn:
             rows = self._conn.execute(f"SELECT id, data_json FROM {table};").fetchall()
@@ -149,6 +165,19 @@ class SQLiteKV:
         for row in rows:
             data = json.loads(row["data_json"])
             records.append(_restore_datetimes(data))
+        return records
+
+    def list_execution_messages(self) -> list[dict[str, Any]]:
+        with self._lock, self._conn:
+            rows = self._conn.execute(
+                "SELECT execution_id, data_json FROM execution_messages ORDER BY execution_id, sequence;"
+            ).fetchall()
+        records: list[dict[str, Any]] = []
+        for row in rows:
+            data = json.loads(row["data_json"])
+            record = _restore_datetimes(data)
+            record["execution_id"] = row["execution_id"]
+            records.append(record)
         return records
 
     def upsert(self, table: str, record: dict[str, Any]) -> None:
@@ -175,9 +204,42 @@ class SQLiteKV:
             )
             self._conn.commit()
 
+    def upsert_execution_message(self, record: dict[str, Any]) -> None:
+        record_id = record.get("id")
+        execution_id = record.get("execution_id")
+        if not record_id or not execution_id:
+            raise ValueError("execution_message requires id and execution_id")
+
+        payload = json.dumps(record, ensure_ascii=False, default=_json_default)
+        created_at = record.get("created_at")
+        updated_at = record.get("updated_at")
+        created_at_s = created_at.isoformat() if isinstance(created_at, datetime) else (created_at or None)
+        updated_at_s = updated_at.isoformat() if isinstance(updated_at, datetime) else (updated_at or None)
+        sequence = record.get("sequence")
+
+        with self._lock, self._conn:
+            self._conn.execute(
+                """
+                INSERT INTO execution_messages(id, execution_id, sequence, data_json, created_at, updated_at)
+                VALUES(?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    data_json=excluded.data_json,
+                    updated_at=excluded.updated_at,
+                    sequence=excluded.sequence;
+                """,
+                (record_id, execution_id, sequence, payload, created_at_s, updated_at_s),
+            )
+            self._conn.commit()
+
     def delete(self, table: str, record_id: str) -> None:
         with self._lock, self._conn:
             self._conn.execute(f"DELETE FROM {table} WHERE id=?;", (record_id,))
+            self._conn.commit()
+
+    def delete_execution(self, execution_id: str) -> None:
+        with self._lock, self._conn:
+            self._conn.execute("DELETE FROM executions WHERE id=?;", (execution_id,))
+            self._conn.execute("DELETE FROM execution_messages WHERE execution_id=?;", (execution_id,))
             self._conn.commit()
 
 
@@ -210,6 +272,13 @@ class Store:
         self.agents = {r["id"]: r for r in self._sqlite.list("agents")}
         self.teams = {r["id"]: r for r in self._sqlite.list("teams")}
         self.model_configs = {r["id"]: r for r in self._sqlite.list("model_configs")}
+        self.executions = {r["id"]: r for r in self._sqlite.list("executions")}
+        self.execution_messages = {}
+        for msg in self._sqlite.list_execution_messages():
+            execution_id = msg.get("execution_id")
+            if not execution_id:
+                continue
+            self.execution_messages.setdefault(execution_id, []).append(msg)
 
     def upsert_agent(self, record: dict[str, Any]) -> None:
         self.agents[record["id"]] = record
@@ -240,6 +309,25 @@ class Store:
         self.model_configs.pop(config_id, None)
         if self._sqlite is not None:
             self._sqlite.delete("model_configs", config_id)
+
+    def upsert_execution(self, record: dict[str, Any]) -> None:
+        self.executions[record["id"]] = record
+        if self._sqlite is not None:
+            self._sqlite.upsert("executions", record)
+
+    def delete_execution(self, execution_id: str) -> None:
+        self.executions.pop(execution_id, None)
+        self.execution_messages.pop(execution_id, None)
+        if self._sqlite is not None:
+            self._sqlite.delete_execution(execution_id)
+
+    def upsert_execution_message(self, record: dict[str, Any]) -> None:
+        execution_id = record.get("execution_id")
+        if not execution_id:
+            return
+        self.execution_messages.setdefault(execution_id, []).append(record)
+        if self._sqlite is not None:
+            self._sqlite.upsert_execution_message(record)
 
 
 _store: Optional[Store] = None

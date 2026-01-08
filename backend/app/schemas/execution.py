@@ -3,7 +3,7 @@ Execution schemas for API request/response validation.
 """
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -45,14 +45,6 @@ class ExecutionControl(BaseModel):
     params: dict = Field(default_factory=dict, description="Action parameters")
 
 
-class ExecutionFollowUp(BaseModel):
-    """Schema for follow-up input during execution."""
-
-    input: str = Field(..., min_length=1, description="Follow-up question or input")
-    target_agent_id: Optional[str] = Field(
-        default=None,
-        description="Specific agent to address (optional)",
-    )
 
 
 class ExecutionMessageResponse(BaseModel):
@@ -141,14 +133,3 @@ class ExecutionListResponse(BaseModel):
 
     class Config:
         from_attributes = True
-
-
-class ExecutionStreamEvent(BaseModel):
-    """Schema for SSE stream events."""
-
-    event_type: str = Field(
-        ...,
-        description="Event type: message, status, error, done",
-    )
-    data: Any = Field(..., description="Event data")
-    sequence: Optional[int] = Field(default=None, description="Message sequence number")

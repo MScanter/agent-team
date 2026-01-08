@@ -66,18 +66,33 @@ interface StreamEvent {
   sequence: number
 }
 
-export function useExecutionStream(executionId: string | null) {
+function buildWsUrl(path: string) {
+  const base = (import.meta as any).env?.VITE_API_BASE_URL || '/api'
+  const baseStr = String(base).replace(/\/$/, '')
+  if (baseStr.startsWith('http://') || baseStr.startsWith('https://')) {
+    const url = new URL(baseStr)
+    const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
+    return `${protocol}//${url.host}${url.pathname}${path}`
+  }
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  return `${protocol}//${window.location.host}${baseStr}${path}`
+}
+
+export function useExecutionSocket(executionId: string | null) {
   const [messages, setMessages] = useState<ExecutionMessage[]>([])
   const [status, setStatus] = useState<'idle' | 'connecting' | 'connected' | 'completed' | 'error'>('idle')
   const [error, setError] = useState<string | null>(null)
   const queryClient = useQueryClient()
   const completedRef = useRef(false)
+  const socketRef = useRef<WebSocket | null>(null)
 
   useEffect(() => {
     setMessages([])
     setStatus('idle')
     setError(null)
     completedRef.current = false
+    socketRef.current?.close()
+    socketRef.current = null
   }, [executionId])
 
   const connect = useCallback(() => {
@@ -86,13 +101,23 @@ export function useExecutionStream(executionId: string | null) {
     completedRef.current = false
     setError(null)
     setStatus('connecting')
-    const eventSource = executionApi.stream(executionId)
+    const wsUrl = buildWsUrl(`/executions/${executionId}/ws`)
+    const socket = new WebSocket(wsUrl)
+    socketRef.current = socket
 
-    eventSource.onopen = () => setStatus('connected')
+    socket.onopen = () => setStatus('connected')
 
-    eventSource.onmessage = (event) => {
+    socket.onmessage = (event) => {
       try {
         const data: StreamEvent = JSON.parse(event.data)
+
+        if (data.event_type === 'pong') {
+          return
+        }
+        if (data.event_type === 'ping') {
+          socket.send(JSON.stringify({ type: 'pong' }))
+          return
+        }
 
         if (data.event_type === 'user') {
           const msg: ExecutionMessage = {
@@ -116,81 +141,42 @@ export function useExecutionStream(executionId: string | null) {
           return
         }
 
-        if (data.event_type === 'await_input') {
-          const msg: ExecutionMessage = {
-            id: (data.data.message_id as string) || `${executionId}-${data.sequence}`,
-            sequence: (data.data.message_sequence as number) || data.sequence,
-            round: (data.data.round as number) || 0,
-            phase: (data.data.phase as string) || 'awaiting_user_input',
-            sender_type: 'system',
-            sender_id: undefined,
-            sender_name: 'system',
-            content: (data.data.message as string) || '等待你的输入',
-            content_type: 'text',
-            confidence: undefined,
-            wants_to_continue: true,
-            input_tokens: 0,
-            output_tokens: 0,
-            metadata: {},
-            created_at: new Date().toISOString(),
-          }
-          setMessages((prev) => [...prev, msg])
-
-          completedRef.current = true
-          setStatus('completed')
-          queryClient.invalidateQueries({ queryKey: ['execution', executionId] })
-          eventSource.close()
-          return
-        }
-
         if (data.event_type === 'error') {
           setError(data.data.message as string)
           setStatus('error')
-          eventSource.close()
           return
         }
 
         if (data.event_type === 'status') {
           const phase = (data.data.phase as string) || ''
           const statusField = (data.data.status as string) || ''
-          const hasMessage = typeof (data.data.message as unknown) === 'string' && Boolean((data.data.message as string).trim())
-          if (!hasMessage && statusField) {
-            completedRef.current = true
-            setStatus('completed')
-            queryClient.invalidateQueries({ queryKey: ['execution', executionId] })
-            eventSource.close()
-            return
-          }
-          const msg: ExecutionMessage = {
-            id: `${executionId}-${data.sequence}`,
-            sequence: data.sequence,
-            round: (data.data.round as number) || 0,
-            phase: phase || 'status',
-            sender_type: 'system',
-            sender_id: undefined,
-            sender_name: 'system',
-            content: (data.data.message as string) || JSON.stringify(data.data),
-            content_type: 'text',
-            confidence: undefined,
-            wants_to_continue: true,
-            input_tokens: 0,
-            output_tokens: 0,
-            metadata: {},
-            created_at: new Date().toISOString(),
-          }
-          setMessages((prev) => [...prev, msg])
+          const hasMessage =
+            typeof (data.data.message as unknown) === 'string' &&
+            Boolean((data.data.message as string).trim())
 
-          // If backend immediately paused (e.g. awaiting user input) or returned a non-streaming status,
-          // close the EventSource without showing a scary error.
-          if (
-            phase === 'awaiting_user_input' ||
-            (statusField && !['pending', 'running'].includes(statusField)) ||
-            (statusField && !hasMessage)
-          ) {
-            completedRef.current = true
-            setStatus('completed')
+          if (hasMessage) {
+            const msg: ExecutionMessage = {
+              id: `${executionId}-${data.sequence}`,
+              sequence: data.sequence,
+              round: (data.data.round as number) || 0,
+              phase: phase || 'status',
+              sender_type: 'system',
+              sender_id: undefined,
+              sender_name: 'system',
+              content: (data.data.message as string) || JSON.stringify(data.data),
+              content_type: 'text',
+              confidence: undefined,
+              wants_to_continue: true,
+              input_tokens: 0,
+              output_tokens: 0,
+              metadata: {},
+              created_at: new Date().toISOString(),
+            }
+            setMessages((prev) => [...prev, msg])
+          }
+
+          if (statusField) {
             queryClient.invalidateQueries({ queryKey: ['execution', executionId] })
-            eventSource.close()
           }
           return
         }
@@ -228,23 +214,27 @@ export function useExecutionStream(executionId: string | null) {
           completedRef.current = true
           setStatus('completed')
           queryClient.invalidateQueries({ queryKey: ['execution', executionId] })
-          eventSource.close()
         }
       } catch {
         // ignore parse errors
       }
     }
 
-    eventSource.onerror = () => {
-      // Don't show error if stream completed normally
+    socket.onerror = () => {
       if (!completedRef.current) {
         setStatus('error')
-        setError('SSE 连接失败，请刷新页面或检查后端是否在运行')
+        setError('WebSocket 连接失败，请刷新页面或检查后端是否在运行')
       }
-      eventSource.close()
     }
 
-    return () => eventSource.close()
+    socket.onclose = () => {
+      if (!completedRef.current) {
+        setStatus('error')
+        setError('WebSocket 已断开连接')
+      }
+    }
+
+    return () => socket.close()
   }, [executionId, queryClient])
 
   useEffect(() => {
@@ -252,5 +242,40 @@ export function useExecutionStream(executionId: string | null) {
     return () => cleanup?.()
   }, [connect])
 
-  return { messages, status, error, reconnect: connect }
+  useEffect(() => {
+    const socket = socketRef.current
+    if (!socket) return
+    if (status !== 'connected') return
+
+    const interval = window.setInterval(() => {
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: 'ping' }))
+      }
+    }, 20000)
+
+    return () => window.clearInterval(interval)
+  }, [status])
+
+  const sendFollowup = useCallback((input: string, targetAgentId?: string) => {
+    const socket = socketRef.current
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      connect()
+      setStatus('error')
+      setError('WebSocket 未连接')
+      return false
+    }
+    completedRef.current = false
+    setStatus('connected')
+    setError(null)
+    socket.send(
+      JSON.stringify({
+        type: 'followup',
+        input,
+        target_agent_id: targetAgentId,
+      })
+    )
+    return true
+  }, [])
+
+  return { messages, status, error, reconnect: connect, sendFollowup }
 }

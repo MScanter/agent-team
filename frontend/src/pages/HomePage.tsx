@@ -75,7 +75,7 @@ export default function HomePage() {
           <div className="p-4 bg-gray-700/50 rounded-lg">
             <h3 className="text-lg font-medium text-white mb-2">实时流式输出</h3>
             <p className="text-gray-400 text-sm">
-              通过 SSE 实时查看每个 Agent 的发言和讨论进展
+              通过 WebSocket 实时查看每个 Agent 的发言和讨论进展
             </p>
           </div>
 

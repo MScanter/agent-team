@@ -1,7 +1,7 @@
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Send, Pause, Play, Square } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useExecution, useCreateExecution, useControlExecution, useDeleteExecution, useExecutionStream } from '@/hooks'
+import { useExecution, useCreateExecution, useControlExecution, useDeleteExecution, useExecutionSocket } from '@/hooks'
 import { ExecutionChat } from '@/components/Execution'
 import { buildExecutionLLMConfig } from '@/services/modelConfigStore'
 
@@ -23,9 +23,8 @@ export default function ExecutionPage() {
   const controlExecution = useControlExecution()
   const deleteExecution = useDeleteExecution()
   const llm = buildExecutionLLMConfig()
-  const { messages, status: streamStatus, error: streamError } = useExecutionStream(
-    execution?.status === 'pending' ? executionId : null
-  )
+  const { messages, status: streamStatus, error: streamError, sendFollowup, reconnect } =
+    useExecutionSocket(executionId)
 
   const baseMessages = useMemo(() => {
     const merged = new Map<string, any>()
@@ -146,12 +145,7 @@ export default function ExecutionPage() {
     }
   }
 
-  const apiBase = useMemo(() => {
-    const base = (import.meta as any).env?.VITE_API_BASE_URL || '/api'
-    return String(base).replace(/\/$/, '')
-  }, [])
-
-  const sendFollowup = async () => {
+  const handleFollowup = async () => {
     if (!executionId || !chatInput.trim()) return
     if (!execution) return
 
@@ -163,107 +157,8 @@ export default function ExecutionPage() {
     }
 
     setIsSendingFollowup(true)
-    try {
-      const res = await fetch(`${apiBase}/executions/${executionId}/followup`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ input: text }),
-      })
-      if (!res.ok || !res.body) {
-        throw new Error(`followup failed: ${res.status}`)
-      }
-
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-
-      const pushSystem = (content: string) => {
-        setClientMessages((prev) => [
-          ...prev,
-          {
-            id: `${executionId}-sys-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-            sequence: 0,
-            round: 0,
-            phase: 'status',
-            sender_type: 'system',
-            sender_name: 'system',
-            content,
-            content_type: 'text',
-            wants_to_continue: true,
-            input_tokens: 0,
-            output_tokens: 0,
-            metadata: {},
-            created_at: new Date().toISOString(),
-          },
-        ])
-      }
-
-      while (true) {
-        const { value, done } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        const parts = buffer.split('\n\n')
-        buffer = parts.pop() || ''
-        for (const part of parts) {
-          const line = part.split('\n').find((l) => l.startsWith('data: '))
-          if (!line) continue
-          const payload = line.slice('data: '.length)
-          let evt: any
-          try {
-            evt = JSON.parse(payload)
-          } catch {
-            continue
-          }
-
-          if (evt.event_type === 'error') {
-            pushSystem(`错误: ${(evt.data && evt.data.message) || 'followup error'}`)
-            continue
-          }
-
-          if (evt.event_type === 'status') {
-            pushSystem((evt.data && evt.data.message) || 'status')
-            continue
-          }
-
-          if (evt.event_type === 'await_input') {
-            pushSystem((evt.data && evt.data.message) || '等待你的输入')
-            continue
-          }
-
-          if (evt.event_type === 'user' || evt.event_type === 'opinion' || evt.event_type === 'summary' || evt.event_type === 'done') {
-            const senderType =
-              evt.event_type === 'user' ? 'user' : evt.agent_id ? 'agent' : 'system'
-            const msg = {
-              id:
-                (evt.data && (evt.data.message_id || evt.data.id)) ||
-                `${executionId}-fu-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-              sequence: (evt.data && evt.data.message_sequence) || evt.sequence || 0,
-              round: (evt.data && evt.data.round) || 0,
-              phase: (evt.data && evt.data.phase) || evt.event_type,
-              sender_type: senderType,
-              sender_id: evt.agent_id,
-              sender_name:
-                senderType === 'user'
-                  ? 'you'
-                  : (evt.data && evt.data.agent_name) || (evt.agent_id ? undefined : 'system'),
-              content:
-                (evt.data && evt.data.content) ||
-                (evt.data && evt.data.summary) ||
-                (evt.data && evt.data.final_output) ||
-                (evt.data && evt.data.final_summary) ||
-                '',
-              content_type: 'text',
-              wants_to_continue: (evt.data && evt.data.wants_to_continue) ?? true,
-              input_tokens: 0,
-              output_tokens: 0,
-              metadata: {},
-              created_at: new Date().toISOString(),
-            }
-            setClientMessages((prev) => [...prev, msg])
-          }
-        }
-      }
-    } catch (e: any) {
+    const ok = sendFollowup(text)
+    if (!ok) {
       setClientMessages((prev) => [
         ...prev,
         {
@@ -273,7 +168,7 @@ export default function ExecutionPage() {
           phase: 'error',
           sender_type: 'system',
           sender_name: 'system',
-          content: `追问失败: ${e?.message || String(e)}`,
+          content: '追问失败: WebSocket 未连接',
           content_type: 'text',
           wants_to_continue: true,
           input_tokens: 0,
@@ -282,9 +177,8 @@ export default function ExecutionPage() {
           created_at: new Date().toISOString(),
         },
       ])
-    } finally {
-      setIsSendingFollowup(false)
     }
+    setIsSendingFollowup(false)
   }
 
   if (!executionId) {
@@ -340,10 +234,16 @@ export default function ExecutionPage() {
           <p className="text-sm text-gray-400">
             状态: {execution.status} | 轮次: {execution.current_round}
             {streamStatus === 'connecting' && ' | 连接中...'}
+            {streamStatus === 'error' && ' | 连接异常'}
           </p>
         </div>
 
         <div className="flex items-center gap-2">
+          {streamStatus === 'error' && (
+            <button className="btn btn-outline" onClick={() => reconnect()}>
+              重连
+            </button>
+          )}
           <button className="btn btn-secondary" onClick={() => void handleNewDiscussion()} disabled={!llm}>
             新讨论
           </button>
@@ -433,7 +333,7 @@ export default function ExecutionPage() {
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey && chatInput.trim()) {
                   e.preventDefault()
-                  void sendFollowup()
+                  void handleFollowup()
                 }
               }}
               disabled={!executionId || isSendingFollowup}
@@ -441,7 +341,7 @@ export default function ExecutionPage() {
             <button
               className="btn btn-primary"
               disabled={!chatInput.trim() || !executionId || isSendingFollowup}
-              onClick={() => void sendFollowup()}
+              onClick={() => void handleFollowup()}
               title="发送追问"
             >
               <Send className="w-5 h-5" />
