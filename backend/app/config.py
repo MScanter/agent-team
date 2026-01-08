@@ -11,7 +11,7 @@ class Settings:
     """Application settings (code-only; no environment variables)."""
 
     # Application
-    app_name: str = "Agent Team"
+    app_name: str = "agent-team"
     app_version: str = "0.1.0"
     debug: bool = False
 

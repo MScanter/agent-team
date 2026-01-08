@@ -1,5 +1,5 @@
 /**
- * API types for the Agent Team Builder application.
+ * API types for the agent-team application.
  */
 
 // Agent types

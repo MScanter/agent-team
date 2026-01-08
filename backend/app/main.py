@@ -32,7 +32,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title=settings.app_name,
         version=settings.app_version,
-        description="Agent Team Builder - Create and orchestrate AI agent teams",
+        description="agent-team - Create and orchestrate AI agent teams",
         lifespan=lifespan,
     )
 

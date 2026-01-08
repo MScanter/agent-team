@@ -1,4 +1,4 @@
-# Agent Team Builder - Backend
+# agent-team - Backend
 
 This backend runs in **single-user mode** (no login).
 

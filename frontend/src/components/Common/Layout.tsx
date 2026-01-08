@@ -19,7 +19,7 @@ export default function Layout() {
       <aside className="fixed inset-y-0 left-0 w-64 bg-gray-800 border-r border-gray-700">
         <div className="flex items-center h-16 px-6 border-b border-gray-700">
           <Play className="w-8 h-8 text-primary-500" />
-          <span className="ml-3 text-xl font-bold text-white">Agent Team</span>
+          <span className="ml-3 text-xl font-bold text-white">agent-team</span>
         </div>
 
         <nav className="mt-6 px-4">

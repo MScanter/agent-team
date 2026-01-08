@@ -1,4 +1,4 @@
-# Agent Team Builder - Frontend
+# agent-team - Frontend
 
 ## Setup
 

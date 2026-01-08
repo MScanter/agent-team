@@ -7,7 +7,7 @@ export default function HomePage() {
       {/* Header */}
       <div className="mb-12">
         <h1 className="text-4xl font-bold text-white mb-4">
-          Agent Team Builder
+          agent-team
         </h1>
         <p className="text-xl text-gray-400">
           创建和编排你的 AI Agent 团队

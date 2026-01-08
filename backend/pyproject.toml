@@ -1,7 +1,7 @@
 [project]
-name = "agent-team-builder"
+name = "agent-team"
 version = "0.1.0"
-description = "Agent Team Builder - Create and orchestrate AI agent teams"
+description = "agent-team - Create and orchestrate AI agent teams"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [

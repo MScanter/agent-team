@@ -1,4 +1,4 @@
-# Agent Team Builder API
+# agent-team API
 
 This API runs in **single-user mode** and uses an **in-memory store** (no database, no login). Data resets when the server restarts.
 
@@ -50,4 +50,3 @@ http://localhost:8080/api
 - `PUT /models/{id}`
 - `DELETE /models/{id}`
 - `POST /models/{id}/test`
-
