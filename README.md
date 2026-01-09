@@ -12,11 +12,8 @@ cd backend
 # Optional but recommended: use repo-local DB in development
 cp .env.example .env
 
-# Create venv + install deps (pick one)
-python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
-# or: uv venv && source .venv/bin/activate && uv pip install -r requirements.txt
-
-python -m app.main
+# Run (uv auto-installs deps from pyproject.toml)
+uv run python -m app.main
 ```
 
 Backend persists `agents / teams / model_configs / executions / messages` via SQLite (see `backend/README.md`).
