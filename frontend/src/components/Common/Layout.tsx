@@ -1,5 +1,6 @@
 import { Outlet, Link, useLocation } from 'react-router-dom'
 import { Users, Bot, Play, Home, Settings } from 'lucide-react'
+import { PixelLogo } from './PixelLogo'
 import clsx from 'clsx'
 
 const navItems = [
@@ -18,7 +19,7 @@ export default function Layout() {
       {/* Sidebar */}
       <aside className="fixed inset-y-0 left-0 w-64 bg-[#2d2d2d] border-r-4 border-black">
         <div className="flex items-center h-16 px-6 border-b-4 border-black">
-          <Play className="w-8 h-8 text-primary-500 fill-current" />
+          <PixelLogo className="w-8 h-8 text-primary-500" />
           <span className="ml-3 text-lg font-press text-white tracking-tighter">AGENT-TEAM</span>
         </div>
 
