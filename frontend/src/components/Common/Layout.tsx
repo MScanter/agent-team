@@ -14,12 +14,12 @@ export default function Layout() {
   const location = useLocation()
 
   return (
-    <div className="min-h-screen bg-gray-900">
+    <div className="min-h-screen bg-[#1a1a1a]">
       {/* Sidebar */}
-      <aside className="fixed inset-y-0 left-0 w-64 bg-gray-800 border-r border-gray-700">
-        <div className="flex items-center h-16 px-6 border-b border-gray-700">
-          <Play className="w-8 h-8 text-primary-500" />
-          <span className="ml-3 text-xl font-bold text-white">agent-team</span>
+      <aside className="fixed inset-y-0 left-0 w-64 bg-[#2d2d2d] border-r-4 border-black">
+        <div className="flex items-center h-16 px-6 border-b-4 border-black">
+          <Play className="w-8 h-8 text-primary-500 fill-current" />
+          <span className="ml-3 text-lg font-press text-white tracking-tighter">AGENT-TEAM</span>
         </div>
 
         <nav className="mt-6 px-4">
@@ -35,10 +35,10 @@ export default function Layout() {
                 key={item.path}
                 to={item.path}
                 className={clsx(
-                  'flex items-center px-4 py-3 mb-2 rounded-lg transition-colors',
+                  'flex items-center px-4 py-3 mb-2 border-2 transition-all font-pixel uppercase tracking-wide',
                   isActive
-                    ? 'bg-primary-600 text-white'
-                    : 'text-gray-400 hover:bg-gray-700 hover:text-white'
+                    ? 'bg-primary-500 text-white border-black shadow-pixel-sm translate-x-[2px] translate-y-[2px]'
+                    : 'text-gray-400 border-transparent hover:border-black hover:text-white hover:bg-gray-700'
                 )}
               >
                 <Icon className="w-5 h-5" />

@@ -15,11 +15,11 @@ const modeLabels: Record<string, string> = {
 }
 
 const modeColors: Record<string, string> = {
-  roundtable: 'bg-blue-900/50 text-blue-400',
-  pipeline: 'bg-purple-900/50 text-purple-400',
-  debate: 'bg-red-900/50 text-red-400',
-  freeform: 'bg-green-900/50 text-green-400',
-  custom: 'bg-gray-700 text-gray-400',
+  roundtable: 'bg-blue-600 text-white',
+  pipeline: 'bg-purple-600 text-white',
+  debate: 'bg-red-600 text-white',
+  freeform: 'bg-green-600 text-white',
+  custom: 'bg-gray-700 text-white',
 }
 
 export default function TeamsPage() {
@@ -52,11 +52,11 @@ export default function TeamsPage() {
   }
 
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-8">
+    <div className="p-8 font-pixel">
+      <div className="flex items-center justify-between mb-8 border-b-4 border-black pb-6">
         <div>
-          <h1 className="text-3xl font-bold text-white mb-2">团队</h1>
-          <p className="text-gray-400">管理你的 Agent 团队配置</p>
+          <h1 className="text-3xl font-press text-white mb-2">TEAMS</h1>
+          <p className="text-gray-400 uppercase tracking-tighter text-sm">管理你的 Agent 团队配置</p>
         </div>
         <button className="btn btn-primary flex items-center" onClick={() => { setEditTeam(null); setShowForm(true) }}>
           <Plus className="w-5 h-5 mr-2" />
@@ -64,13 +64,13 @@ export default function TeamsPage() {
         </button>
       </div>
 
-      <div className="mb-6">
+      <div className="mb-8">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
           <input
             type="text"
             placeholder="搜索团队..."
-            className="input pl-10"
+            className="input pl-12"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -78,19 +78,19 @@ export default function TeamsPage() {
       </div>
 
       {isLoading ? (
-        <div className="text-center py-12 text-gray-400">加载中...</div>
+        <div className="text-center py-12 text-gray-400 uppercase">加载中...</div>
       ) : data?.items.length === 0 ? (
         <div className="card text-center py-12">
-          <Users className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-          <h3 className="text-xl font-medium text-white mb-2">还没有团队</h3>
-          <p className="text-gray-400 mb-6">创建你的第一个 Agent 团队开始协作</p>
+          <Users className="w-16 h-16 text-gray-600 mx-auto mb-6" />
+          <h3 className="text-xl font-press text-white mb-4">还没有团队</h3>
+          <p className="text-gray-400 mb-8 uppercase text-sm tracking-tight">创建你的第一个 Agent 团队开始协作</p>
           <button className="btn btn-primary" onClick={() => setShowForm(true)}>
             <Plus className="w-5 h-5 mr-2 inline" />
             创建团队
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {data?.items.map((team: TeamListItem) => (
             <TeamCard
               key={team.id}
@@ -128,49 +128,51 @@ function TeamCard({
   onStart: () => void
 }) {
   return (
-    <div className="card hover:border-primary-500 border border-transparent transition-colors relative">
+    <div className="card group hover:bg-[#3d3d3d] transition-all relative">
       <div className="absolute top-3 right-3">
-        <button onClick={onMenuToggle} className="text-gray-400 hover:text-white p-1">
-          <MoreVertical className="w-4 h-4" />
+        <button onClick={onMenuToggle} className="text-gray-400 hover:text-white p-1 border-2 border-transparent hover:border-black active:bg-black transition-all">
+          <MoreVertical className="w-5 h-5" />
         </button>
         {menuOpen && (
-          <div className="absolute right-0 mt-1 bg-gray-700 rounded-lg shadow-lg py-1 min-w-[120px] z-10">
-            <button onClick={onStart} className="w-full px-3 py-2 text-left text-sm text-green-400 hover:bg-gray-600 flex items-center">
-              <Play className="w-4 h-4 mr-2" /> 开始讨论
+          <div className="absolute right-0 mt-2 bg-[#1a1a1a] border-4 border-black shadow-pixel py-0 min-w-[140px] z-10">
+            <button onClick={onStart} className="w-full px-4 py-3 text-left text-sm text-green-400 hover:bg-green-600 hover:text-white flex items-center border-b-2 border-black last:border-b-0 uppercase tracking-tighter">
+              <Play className="w-4 h-4 mr-3" /> 开始讨论
             </button>
-            <button onClick={onEdit} className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-gray-600 flex items-center">
-              <Edit className="w-4 h-4 mr-2" /> 编辑
+            <button onClick={onEdit} className="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-primary-600 hover:text-white flex items-center border-b-2 border-black last:border-b-0 uppercase tracking-tighter">
+              <Edit className="w-4 h-4 mr-3" /> 编辑
             </button>
-            <button onClick={onDelete} className="w-full px-3 py-2 text-left text-sm text-red-400 hover:bg-gray-600 flex items-center">
-              <Trash2 className="w-4 h-4 mr-2" /> 删除
+            <button onClick={onDelete} className="w-full px-4 py-3 text-left text-sm text-red-400 hover:bg-red-600 hover:text-white flex items-center border-b-2 border-black last:border-b-0 uppercase tracking-tighter">
+              <Trash2 className="w-4 h-4 mr-3" /> 删除
             </button>
           </div>
         )}
       </div>
 
-      <div className="flex items-start mb-4 pr-8">
-        <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-primary-600 to-purple-600 flex items-center justify-center">
+      <div className="flex items-start mb-6 pr-8">
+        <div className="w-16 h-16 border-4 border-black bg-gradient-to-br from-primary-600 to-purple-600 flex items-center justify-center shadow-pixel-sm">
           {team.icon ? (
-            <img src={team.icon} alt={team.name} className="w-8 h-8" />
+            <img src={team.icon} alt={team.name} className="w-10 h-10 rendering-pixelated" />
           ) : (
-            <Users className="w-6 h-6 text-white" />
+            <Users className="w-8 h-8 text-white" />
           )}
         </div>
         <div className="ml-4 flex-1">
-          <h3 className="text-lg font-semibold text-white">{team.name}</h3>
-          <p className="text-sm text-gray-400">{team.member_count ?? 0} 个成员</p>
+          <h3 className="text-lg font-press text-white leading-tight mb-1">{team.name}</h3>
+          <p className="text-xs text-primary-400 uppercase tracking-widest">{team.member_count ?? 0} 个成员</p>
         </div>
       </div>
 
       {team.description && (
-        <p className="text-gray-400 text-sm mb-4 line-clamp-2">{team.description}</p>
+        <div className="bg-black/20 p-3 border-2 border-black mb-6">
+          <p className="text-gray-400 text-sm line-clamp-2 leading-relaxed">{team.description}</p>
+        </div>
       )}
 
-      <div className="flex items-center justify-between text-sm">
-        <span className={`px-2 py-1 rounded-full ${modeColors[team.collaboration_mode] || modeColors.custom}`}>
+      <div className="flex items-center justify-between text-[10px] font-press">
+        <span className={`px-2 py-1 border-2 border-black shadow-pixel-sm ${modeColors[team.collaboration_mode] || modeColors.custom}`}>
           {modeLabels[team.collaboration_mode] || team.collaboration_mode}
         </span>
-        <span className="text-gray-500">使用 {team.usage_count} 次</span>
+        <span className="text-gray-500 uppercase">USED: {team.usage_count}</span>
       </div>
     </div>
   )

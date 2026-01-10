@@ -44,110 +44,120 @@ export default function ModelConfigManager() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      <div className="flex items-center justify-center h-64 font-pixel">
+        <div className="text-gray-400 uppercase tracking-widest animate-pulse">加载中...</div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-white">API配置管理</h1>
+    <div className="p-8 font-pixel">
+      <div className="flex justify-between items-center mb-8 border-b-4 border-black pb-6">
+        <div>
+          <h1 className="text-3xl font-press text-white mb-2 tracking-tighter uppercase">API Config</h1>
+          <p className="text-gray-400 uppercase tracking-tighter text-sm">管理你的 AI 模型 API 连接配置</p>
+        </div>
         <button
           onClick={handleCreate}
           className="btn btn-primary flex items-center gap-2"
         >
-          <Plus className="w-4 h-4" />
-          添加API配置
+          <Plus className="w-5 h-5" />
+          添加 API 配置
         </button>
       </div>
 
       {configs && configs.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {configs.map((config) => (
             <div
               key={config.id}
-              className="bg-gray-800 rounded-lg p-4 border border-gray-700 hover:border-gray-600 transition-colors"
+              className="card group hover:bg-[#3d3d3d] transition-all relative"
             >
-              <div className="flex justify-between items-start">
-                <div>
-                  <h3 className="font-semibold text-white flex items-center gap-2">
-                    <Settings className="w-5 h-5 text-blue-400" />
-                    {config.name}
-                  </h3>
-                  <p className="text-sm text-gray-400 mt-1">{config.description}</p>
-                  <div className="mt-2 text-xs">
-                    <div className="text-gray-300">
-                      <span className="text-gray-400">提供商:</span> OpenAI兼容API
-                    </div>
-                    <div className="text-gray-300">
-                      <span className="text-gray-400">模型:</span> {config.model_id}
-                    </div>
-                    <div className="text-gray-300">
-                      <span className="text-gray-400">上下文长度:</span> {config.max_context_length.toLocaleString()} tokens
-                    </div>
+              <div className="absolute top-3 right-3 flex gap-1">
+                <button
+                  onClick={() => handleEdit(config)}
+                  className="p-2 text-gray-400 hover:text-white border-2 border-transparent hover:border-black active:bg-black transition-all"
+                  title="编辑"
+                >
+                  <Edit3 className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => handleDelete(config.id)}
+                  className="p-2 text-gray-400 hover:text-red-500 border-2 border-transparent hover:border-black active:bg-black transition-all"
+                  title="删除"
+                >
+                  <Trash2 className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="mb-6">
+                <h3 className="text-lg font-press text-white flex items-center gap-3 mb-2 leading-tight">
+                  <div className="p-2 bg-blue-600 border-2 border-black shadow-pixel-sm">
+                    <Settings className="w-5 h-5 text-white" />
                   </div>
+                  {config.name}
+                </h3>
+                {config.description && (
+                  <p className="text-xs text-gray-400 mt-3 bg-black/20 p-2 border-2 border-black line-clamp-2">{config.description}</p>
+                )}
+              </div>
+
+              <div className="space-y-2 mb-6 bg-black/30 p-4 border-2 border-black text-xs uppercase tracking-tight">
+                <div className="flex justify-between border-b border-black/30 pb-1">
+                  <span className="text-gray-500">PROVIDER:</span>
+                  <span className="text-primary-400">OPENAI COMPATIBLE</span>
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleEdit(config)}
-                    className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded"
-                    title="编辑"
-                  >
-                    <Edit3 className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(config.id)}
-                    className="p-2 text-gray-400 hover:text-red-400 hover:bg-gray-700 rounded"
-                    title="删除"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                <div className="flex justify-between border-b border-black/30 pb-1">
+                  <span className="text-gray-500">MODEL ID:</span>
+                  <span className="text-primary-400 truncate ml-4" title={config.model_id}>{config.model_id}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">CONTEXT:</span>
+                  <span className="text-primary-400">{config.max_context_length.toLocaleString()} TOKENS</span>
                 </div>
               </div>
               
-              <div className="mt-4 flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 mb-4 h-8 items-center">
                 {config.supports_tools && (
-                  <span className="px-2 py-1 bg-green-900/50 text-green-300 text-xs rounded">
-                    工具调用
+                  <span className="px-2 py-1 bg-green-600 text-white text-[10px] font-press border-2 border-black shadow-pixel-sm">
+                    TOOLS
                   </span>
                 )}
                 {config.supports_vision && (
-                  <span className="px-2 py-1 bg-blue-900/50 text-blue-300 text-xs rounded">
-                    视觉
+                  <span className="px-2 py-1 bg-blue-600 text-white text-[10px] font-press border-2 border-black shadow-pixel-sm">
+                    VISION
                   </span>
                 )}
                 {config.is_default && (
-                  <span className="px-2 py-1 bg-yellow-900/50 text-yellow-300 text-xs rounded">
-                    默认
+                  <span className="px-2 py-1 bg-yellow-500 text-black text-[10px] font-press border-2 border-black shadow-pixel-sm">
+                    DEFAULT
                   </span>
                 )}
-                {!config.is_default && (
-                  <button
-                    type="button"
-                    onClick={() => handleSetDefault(config.id)}
-                    className="px-2 py-1 bg-gray-700 hover:bg-gray-600 text-gray-200 text-xs rounded"
-                    title="设为默认（用于未绑定配置的 Agent & 协调器）"
-                  >
-                    设为默认
-                  </button>
-                )}
               </div>
+
+              {!config.is_default && (
+                <button
+                  type="button"
+                  onClick={() => handleSetDefault(config.id)}
+                  className="w-full btn btn-secondary text-xs"
+                >
+                  SET AS DEFAULT
+                </button>
+              )}
             </div>
           ))}
         </div>
       ) : (
-        <div className="text-center py-12">
-          <Settings className="w-12 h-12 text-gray-500 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-300 mb-2">没有API配置</h3>
-          <p className="text-gray-500 mb-6">您还没有创建任何API配置</p>
+        <div className="card text-center py-12">
+          <Settings className="w-16 h-16 text-gray-600 mx-auto mb-6" />
+          <h3 className="text-xl font-press text-white mb-4 uppercase">没有 API 配置</h3>
+          <p className="text-gray-400 mb-8 uppercase text-sm tracking-tight leading-relaxed">您还没有创建任何 API 配置，至少需要一个配置才能开始讨论。</p>
           <button
             onClick={handleCreate}
-            className="btn btn-primary inline-flex items-center gap-2"
+            className="btn btn-primary"
           >
-            <Plus className="w-4 h-4" />
-            创建第一个API配置
+            <Plus className="w-5 h-5 mr-2 inline" />
+            创建第一个 API 配置
           </button>
         </div>
       )}

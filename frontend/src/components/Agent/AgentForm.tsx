@@ -53,20 +53,20 @@ export default function AgentForm({ agent, onClose }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-gray-800 rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-4 border-b border-gray-700">
-          <h2 className="text-xl font-semibold text-white">
-            {isEdit ? '编辑 Agent' : '创建 Agent'}
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 font-pixel">
+      <div className="bg-[#2d2d2d] border-4 border-black w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-pixel">
+        <div className="flex items-center justify-between p-6 border-b-4 border-black sticky top-0 bg-[#2d2d2d] z-10">
+          <h2 className="text-xl font-press text-white uppercase tracking-tighter">
+            {isEdit ? 'EDIT AGENT' : 'CREATE AGENT'}
           </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white">
-            <X className="w-5 h-5" />
+          <button onClick={onClose} className="text-gray-400 hover:text-white border-2 border-transparent hover:border-black p-1">
+            <X className="w-6 h-6" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-4 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">名称</label>
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          <div className="bg-black/20 p-4 border-2 border-black">
+            <label className="label uppercase tracking-tighter">名称</label>
             <input
               type="text"
               className="input w-full"
@@ -76,45 +76,45 @@ export default function AgentForm({ agent, onClose }: Props) {
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">描述</label>
+          <div className="bg-black/20 p-4 border-2 border-black">
+            <label className="label uppercase tracking-tighter">描述</label>
             <textarea
-              className="input w-full h-20"
+              className="input w-full h-24"
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">系统提示词</label>
+          <div className="bg-black/20 p-4 border-2 border-black">
+            <label className="label uppercase tracking-tighter">系统提示词</label>
             <textarea
-              className="input w-full h-32 font-mono text-sm"
+              className="input w-full h-40 font-mono text-sm"
               value={form.system_prompt}
               onChange={(e) => setForm({ ...form, system_prompt: e.target.value })}
               required
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">模型配置</label>
+          <div className="bg-black/20 p-4 border-2 border-black">
+            <label className="label uppercase tracking-tighter">模型配置</label>
             <select
-              className="input w-full"
+              className="input w-full appearance-none cursor-pointer"
               value={form.model_id || ''}
               onChange={(e) => setForm({ ...form, model_id: e.target.value || undefined })}
             >
-              <option value="">默认（使用本地默认配置）</option>
+              <option value="">默认 (使用本地默认配置)</option>
               {(modelConfigs || []).map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name} ({c.model_id})
                 </option>
               ))}
             </select>
-            <p className="text-xs text-gray-400 mt-1">在“API配置”里创建模型配置后可在这里绑定</p>
+            <p className="text-[10px] text-gray-400 mt-2 uppercase tracking-tight">在 “API配置” 里创建模型配置后可在这里绑定</p>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
+          <div className="grid grid-cols-2 gap-6">
+            <div className="bg-black/20 p-4 border-2 border-black">
+              <label className="label uppercase tracking-tighter mb-2">
                 Temperature: {form.temperature}
               </label>
               <input
@@ -122,13 +122,13 @@ export default function AgentForm({ agent, onClose }: Props) {
                 min="0"
                 max="2"
                 step="0.1"
-                className="w-full"
+                className="w-full accent-primary-500"
                 value={form.temperature}
                 onChange={(e) => setForm({ ...form, temperature: parseFloat(e.target.value) })}
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Max Tokens</label>
+            <div className="bg-black/20 p-4 border-2 border-black">
+              <label className="label uppercase tracking-tighter">Max Tokens</label>
               <input
                 type="number"
                 className="input w-full"
@@ -138,10 +138,10 @@ export default function AgentForm({ agent, onClose }: Props) {
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">协作风格</label>
+          <div className="bg-black/20 p-4 border-2 border-black">
+            <label className="label uppercase tracking-tighter">协作风格</label>
             <select
-              className="input w-full"
+              className="input w-full appearance-none cursor-pointer"
               value={form.collaboration_style}
               onChange={(e) => setForm({ ...form, collaboration_style: e.target.value as AgentCreate['collaboration_style'] })}
             >
@@ -151,14 +151,14 @@ export default function AgentForm({ agent, onClose }: Props) {
             </select>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">标签</label>
-            <div className="flex gap-2 mb-2 flex-wrap">
+          <div className="bg-black/20 p-4 border-2 border-black">
+            <label className="label uppercase tracking-tighter">标签</label>
+            <div className="flex gap-2 mb-4 flex-wrap">
               {form.tags?.map((tag) => (
-                <span key={tag} className="px-2 py-1 bg-primary-600 text-white rounded-full text-sm flex items-center">
+                <span key={tag} className="px-3 py-1 bg-primary-600 text-white border-2 border-black shadow-pixel-sm text-xs flex items-center uppercase">
                   {tag}
-                  <button type="button" onClick={() => removeTag(tag)} className="ml-1">
-                    <X className="w-3 h-3" />
+                  <button type="button" onClick={() => removeTag(tag)} className="ml-2 hover:text-black transition-colors">
+                    <X className="w-4 h-4" />
                   </button>
                 </span>
               ))}
@@ -170,24 +170,24 @@ export default function AgentForm({ agent, onClose }: Props) {
                 value={tagInput}
                 onChange={(e) => setTagInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
-                placeholder="添加标签"
+                placeholder="添加标签..."
               />
-              <button type="button" onClick={addTag} className="btn btn-secondary">
+              <button type="button" onClick={addTag} className="btn btn-secondary whitespace-nowrap">
                 添加
               </button>
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-gray-700">
+          <div className="flex justify-end gap-4 pt-6 border-t-4 border-black">
             <button type="button" onClick={onClose} className="btn btn-secondary">
-              取消
+              CANCEL
             </button>
             <button
               type="submit"
               className="btn btn-primary"
               disabled={createAgent.isPending || updateAgent.isPending}
             >
-              {createAgent.isPending || updateAgent.isPending ? '保存中...' : '保存'}
+              {createAgent.isPending || updateAgent.isPending ? 'SAVING...' : 'SAVE'}
             </button>
           </div>
         </form>

@@ -5,6 +5,16 @@ export default {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        pixel: ['"Pixelify Sans"', 'cursive'],
+        press: ['"Press Start 2P"', 'cursive'],
+      },
+      boxShadow: {
+        'pixel': '4px 4px 0px 0px rgba(0, 0, 0, 1)',
+        'pixel-sm': '2px 2px 0px 0px rgba(0, 0, 0, 1)',
+        'pixel-hover': '2px 2px 0px 0px rgba(0, 0, 0, 1)',
+        'pixel-active': '0px 0px 0px 0px rgba(0, 0, 0, 1)',
+      },
       colors: {
         primary: {
           50: '#f0f9ff',

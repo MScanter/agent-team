@@ -16,12 +16,12 @@ export default function ExecutionChat({ messages, status, error }: Props) {
   }, [messages])
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.length === 0 && status === 'connected' && (
-          <div className="text-center text-gray-400 py-8">
-            <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2" />
-            等待讨论开始...
+    <div className="flex flex-col h-full font-pixel">
+      <div className="flex-1 overflow-y-auto p-6 space-y-8 bg-[#1a1a1a]">
+        {messages.length === 0 && (status === 'connected' || status === 'connecting') && (
+          <div className="text-center text-gray-500 py-12 uppercase tracking-widest">
+            <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4 text-primary-500" />
+            [ WAITING FOR DISCUSSION TO START... ]
           </div>
         )}
 
@@ -30,8 +30,8 @@ export default function ExecutionChat({ messages, status, error }: Props) {
         ))}
 
         {error && (
-          <div className="bg-red-900/50 text-red-400 p-3 rounded-lg">
-            错误: {error}
+          <div className="bg-red-900/50 text-red-400 p-4 border-2 border-red-500 shadow-pixel-sm uppercase text-xs">
+            ERROR: {error}
           </div>
         )}
 
@@ -39,9 +39,9 @@ export default function ExecutionChat({ messages, status, error }: Props) {
       </div>
 
       {status === 'connecting' && (
-        <div className="p-4 border-t border-gray-700 text-center text-gray-400">
-          <Loader2 className="w-4 h-4 animate-spin inline mr-2" />
-          连接中...
+        <div className="p-4 border-t-4 border-black bg-[#2d2d2d] text-center text-gray-400 uppercase text-[10px] font-press tracking-tighter">
+          <Loader2 className="w-4 h-4 animate-spin inline mr-3" />
+          CONNECTING...
         </div>
       )}
     </div>
@@ -53,35 +53,35 @@ function MessageBubble({ message }: { message: ExecutionMessage }) {
   const isSystem = message.sender_type === 'system'
 
   return (
-    <div className={`flex gap-3 ${isUser ? 'flex-row-reverse' : ''}`}>
-      <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+    <div className={`flex gap-4 ${isUser ? 'flex-row-reverse' : ''} group`}>
+      <div className={`w-12 h-12 border-4 border-black flex items-center justify-center flex-shrink-0 shadow-pixel-sm ${
         isUser ? 'bg-primary-600' : isSystem ? 'bg-gray-600' : 'bg-green-600'
       }`}>
-        {isUser ? <User className="w-4 h-4 text-white" /> : <Bot className="w-4 h-4 text-white" />}
+        {isUser ? <User className="w-6 h-6 text-white" /> : <Bot className="w-6 h-6 text-white" />}
       </div>
 
-      <div className={`max-w-[80%] ${isUser ? 'text-right' : ''}`}>
+      <div className={`max-w-[85%] ${isUser ? 'text-right' : ''}`}>
         {message.sender_name && (
-          <div className="text-xs text-gray-400 mb-1">
+          <div className="text-[10px] font-press text-primary-400 mb-2 uppercase tracking-tighter">
             {message.sender_name}
             {message.confidence && (
-              <span className="ml-2 text-gray-500">
-                置信度: {Math.round(message.confidence * 100)}%
+              <span className="ml-3 text-gray-500">
+                CONF: {Math.round(message.confidence * 100)}%
               </span>
             )}
           </div>
         )}
-        <div className={`p-3 rounded-lg ${
+        <div className={`p-4 border-4 border-black shadow-pixel transition-transform group-hover:translate-x-[2px] group-hover:translate-y-[2px] group-hover:shadow-pixel-sm ${
           isUser
             ? 'bg-primary-600 text-white'
             : isSystem
-            ? 'bg-gray-700 text-gray-300'
-            : 'bg-gray-700 text-white'
+            ? 'bg-[#333] text-gray-400'
+            : 'bg-[#2d2d2d] text-white'
         }`}>
-          <p className="whitespace-pre-wrap">{message.content}</p>
+          <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
         </div>
-        <div className="text-xs text-gray-500 mt-1">
-          Round {message.round} · {message.phase}
+        <div className="text-[10px] font-press text-gray-500 mt-3 uppercase tracking-tighter">
+          ROUND {message.round} · {message.phase}
         </div>
       </div>
     </div>

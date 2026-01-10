@@ -185,10 +185,10 @@ export default function ExecutionPage() {
 
   if (!executionId) {
     return (
-      <div className="flex items-center justify-center h-screen">
+      <div className="flex items-center justify-center h-screen font-pixel">
         <div className="card w-full max-w-lg">
-          <h2 className="text-xl font-bold text-white mb-2">讨论</h2>
-          <p className="text-sm text-gray-400 mb-4">从团队页面选择一个团队开始讨论。</p>
+          <h2 className="text-xl font-press text-white mb-4">讨论</h2>
+          <p className="text-sm text-gray-400 mb-8 uppercase tracking-tighter">从团队页面选择一个团队开始讨论。</p>
           <button className="btn btn-primary w-full" onClick={() => navigate('/teams')}>
             去选择团队
           </button>
@@ -199,20 +199,20 @@ export default function ExecutionPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-gray-400">加载中...</div>
+      <div className="flex items-center justify-center h-screen font-pixel">
+        <div className="text-gray-400 uppercase tracking-widest animate-pulse">加载中...</div>
       </div>
     )
   }
 
   if (!execution) {
     return (
-      <div className="flex items-center justify-center h-screen">
+      <div className="flex items-center justify-center h-screen font-pixel">
         <div className="card w-full max-w-lg">
-          <h2 className="text-xl font-bold text-white mb-2">讨论不存在</h2>
-          <p className="text-sm text-gray-400 mb-4">可能已被删除，或本地记录的 ID 已失效。</p>
+          <h2 className="text-xl font-press text-white mb-4">讨论不存在</h2>
+          <p className="text-sm text-gray-400 mb-8 uppercase tracking-tighter">可能已被删除，或本地记录的 ID 已失效。</p>
           <button
-            className="btn btn-secondary w-full mb-2"
+            className="btn btn-secondary w-full mb-4"
             onClick={() => {
               localStorage.removeItem('agent-team:lastExecutionId')
               navigate('/teams')
@@ -229,115 +229,112 @@ export default function ExecutionPage() {
   }
 
   return (
-    <div className="flex flex-col h-screen">
-      <div className="flex items-center justify-between p-4 border-b border-gray-700">
+    <div className="flex flex-col h-screen font-pixel">
+      <div className="flex items-center justify-between p-6 border-b-4 border-black bg-[#2d2d2d]">
         <div>
-          <h1 className="text-xl font-bold text-white">讨论</h1>
-          <p className="text-sm text-gray-400">
-            状态: {execution.status} | 轮次: {execution.current_round}
-            {streamStatus === 'connecting' && ' | 连接中...'}
-            {streamStatus === 'error' && ' | 连接异常'}
-          </p>
+          <h1 className="text-xl font-press text-white uppercase tracking-tighter">EXECUTION</h1>
+          <div className="text-[10px] font-press text-gray-400 mt-2 flex gap-4 uppercase">
+            <span>STATUS: <span className="text-primary-400">{execution.status}</span></span>
+            <span>ROUND: <span className="text-primary-400">{execution.current_round}</span></span>
+            {streamStatus === 'connecting' && <span className="text-yellow-500 animate-pulse">| CONNECTING...</span>}
+            {streamStatus === 'error' && <span className="text-red-500">| ERROR</span>}
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           {streamStatus === 'error' && (
             <button className="btn btn-outline" onClick={() => reconnect()}>
-              重连
+              RECONNECT
             </button>
           )}
           <button className="btn btn-secondary" onClick={() => void handleNewDiscussion()} disabled={!llm}>
-            新讨论
+            NEW
           </button>
 
           {execution.status === 'running' ? (
             <button className="btn btn-secondary flex items-center" onClick={() => handleControl('pause')}>
               <Pause className="w-4 h-4 mr-2" />
-              暂停
+              PAUSE
             </button>
           ) : execution.status === 'paused' ? (
             <button className="btn btn-primary flex items-center" onClick={() => handleControl('resume')}>
               <Play className="w-4 h-4 mr-2" />
-              继续
+              RESUME
             </button>
           ) : null}
 
           {['running', 'paused'].includes(execution.status) && (
             <button
-              className="btn btn-outline flex items-center text-red-400 border-red-400 hover:bg-red-900/50"
+              className="btn btn-outline flex items-center text-red-400 border-red-500 hover:bg-red-900 shadow-pixel-sm"
               onClick={() => handleControl('stop')}
             >
               <Square className="w-4 h-4 mr-2" />
-              结束
+              STOP
             </button>
           )}
 
           <button
-            className="btn btn-outline flex items-center text-red-400 border-red-400 hover:bg-red-900/50"
+            className="btn btn-outline flex items-center text-red-400 border-red-500 hover:bg-red-900 shadow-pixel-sm"
             onClick={() => void handleDeleteDiscussion()}
             disabled={deleteExecution.isPending}
             title="删除当前讨论"
           >
-            删除
+            DELETE
           </button>
         </div>
       </div>
 
-      <div className="flex-1 overflow-hidden flex">
+      <div className="flex-1 overflow-hidden flex bg-[#1a1a1a]">
         {isTauriApp() && (
           <ExecutionWorkspacePanel
             executionId={executionId}
             initialWorkspacePath={execution.workspace_path}
           />
         )}
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-hidden border-l-4 border-black">
           <ExecutionChat messages={displayMessages} status={streamStatus} error={streamError} />
         </div>
       </div>
 
-      <div className="px-4 py-2 border-t border-gray-700 bg-gray-800/50">
-        <div className="flex items-center justify-between text-sm text-gray-400 mb-1">
-          <span>Token 使用</span>
+      <div className="px-6 py-3 border-t-4 border-black bg-[#2d2d2d]">
+        <div className="flex items-center justify-between text-[10px] font-press text-gray-400 mb-2 uppercase tracking-tighter">
+          <span>TOKEN USAGE</span>
           <span>
             {execution.tokens_used.toLocaleString()} / {execution.tokens_budget.toLocaleString()}
           </span>
         </div>
-        <div className="w-full bg-gray-700 rounded-full h-2">
+        <div className="w-full bg-black border-2 border-black h-4 shadow-pixel-sm">
           <div
-            className="bg-primary-500 h-2 rounded-full transition-all"
+            className="bg-primary-500 h-full transition-all border-r-2 border-black"
             style={{ width: `${Math.min(100, (execution.tokens_used / execution.tokens_budget) * 100)}%` }}
           />
         </div>
       </div>
 
-      {execution.status === 'completed' && (
-        <div className="p-4 border-t border-gray-700" />
-      )}
-
       {execution.status !== 'failed' && (
-        <div className="p-4 border-t border-gray-700">
+        <div className="p-6 border-t-4 border-black bg-[#2d2d2d]">
           {!llm && (
-            <div className="mb-3 text-sm text-yellow-300 bg-yellow-900/30 border border-yellow-800 rounded p-3">
-              需要先在“API配置”里创建默认配置并填写 API Key。
+            <div className="mb-4 text-xs font-press text-yellow-300 bg-yellow-900/50 border-2 border-yellow-500 p-4 shadow-pixel-sm uppercase tracking-tighter leading-relaxed">
+              需要先在 “API配置” 里创建默认配置并填写 API KEY。
               <button
                 type="button"
-                className="ml-2 underline text-yellow-200 hover:text-yellow-100"
+                className="ml-3 underline text-yellow-200 hover:text-yellow-100"
                 onClick={() => navigate('/models')}
               >
-                去配置
+                GO TO CONFIG
               </button>
             </div>
           )}
           {startError && (
-            <div className="mb-3 text-sm text-red-300 bg-red-900/30 border border-red-800 rounded p-3">
-              创建失败：{startError}
+            <div className="mb-4 text-xs font-press text-red-300 bg-red-900/50 border-2 border-red-500 p-4 shadow-pixel-sm uppercase tracking-tighter leading-relaxed">
+              FAILED: {startError}
             </div>
           )}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-4">
             <input
               type="text"
               className="input flex-1"
-              placeholder="在讨论中输入关键词/追问（运行中会自动尝试暂停）..."
+              placeholder="输入追问... (ENTER TO SEND)"
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
               onKeyDown={(e) => {
@@ -349,16 +346,15 @@ export default function ExecutionPage() {
               disabled={!executionId || isSendingFollowup}
             />
             <button
-              className="btn btn-primary"
+              className="btn btn-primary p-3"
               disabled={!chatInput.trim() || !executionId || isSendingFollowup}
               onClick={() => void handleFollowup()}
-              title="发送追问"
             >
-              <Send className="w-5 h-5" />
+              <Send className="w-6 h-6" />
             </button>
           </div>
-          <p className="text-xs text-gray-500 mt-2">
-            提示：后端只允许在暂停/完成状态处理追问；运行中会先请求暂停（可能需要等待当前一步完成）。
+          <p className="text-[10px] text-gray-500 mt-3 uppercase tracking-tight">
+            PROMPT: 后端只允许在暂停/完成状态处理追问；运行中会先请求暂停。
           </p>
         </div>
       )}
