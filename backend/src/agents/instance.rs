@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::models::agent::Agent;
 use crate::llm::provider::{LLMProvider, Message, MessageRole};
+use crate::tools::definition::{ToolDefinition, ToolTrace};
+use crate::tools::executor::ToolExecutor;
 
 #[derive(Clone)]
 pub struct AgentInstance {
@@ -73,11 +75,14 @@ impl AgentInstance {
     fn system_message(&self) -> Message {
         Message {
             role: MessageRole::System,
-            content: self.system_prompt.clone(),
+            content: Some(self.system_prompt.clone()),
             name: None,
+            tool_call_id: None,
+            tool_calls: None,
         }
     }
 
+    #[allow(dead_code)]
     pub async fn generate_opinion(
         &mut self,
         topic: &str,
@@ -85,13 +90,30 @@ impl AgentInstance {
         recent_opinions: &[serde_json::Value],
         phase: &str,
     ) -> Result<AgentResponse, crate::error::AppError> {
+        let (resp, _traces) = self
+            .generate_opinion_with_tools(topic, discussion_summary, recent_opinions, phase, &[], None)
+            .await?;
+        Ok(resp)
+    }
+
+    pub async fn generate_opinion_with_tools(
+        &mut self,
+        topic: &str,
+        discussion_summary: &str,
+        recent_opinions: &[serde_json::Value],
+        phase: &str,
+        tools: &[ToolDefinition],
+        executor: Option<&ToolExecutor>,
+    ) -> Result<(AgentResponse, Vec<ToolTrace>), crate::error::AppError> {
         let mut messages = vec![self.system_message()];
 
         let context = self.build_context_message(discussion_summary, recent_opinions, topic);
         messages.push(Message {
             role: MessageRole::User,
-            content: context,
+            content: Some(context),
             name: None,
+            tool_call_id: None,
+            tool_calls: None,
         });
 
         let instruction = if phase == "initial" {
@@ -101,29 +123,108 @@ impl AgentInstance {
         };
         messages.push(Message {
             role: MessageRole::User,
-            content: instruction.to_string(),
+            content: Some(instruction.to_string()),
             name: None,
+            tool_call_id: None,
+            tool_calls: None,
         });
 
-        let resp = self
-            .llm
-            .chat(messages, self.temperature, self.max_tokens)
-            .await?;
+        let tools_enabled = executor.is_some() && !tools.is_empty();
+        if tools_enabled {
+            messages.insert(
+                1,
+                Message {
+                    role: MessageRole::System,
+                    content: Some(
+                        "你可以在需要时调用工具来读取/搜索/修改工作目录下的文件。仅在确有必要时调用工具，并在最终回答中引用工具返回的结果。".to_string(),
+                    ),
+                    name: None,
+                    tool_call_id: None,
+                    tool_calls: None,
+                },
+            );
+        }
 
-        let content = resp.content.trim().to_string();
+        let mut traces: Vec<ToolTrace> = Vec::new();
+        let mut total_input_tokens: u32 = 0;
+        let mut total_output_tokens: u32 = 0;
+
+        let max_iters: usize = 10;
+        let mut final_text = String::new();
+        let mut last_text = String::new();
+        for _ in 0..max_iters {
+            let resp = if tools_enabled {
+                self.llm
+                    .chat_with_tools(messages.clone(), tools, self.temperature, self.max_tokens)
+                    .await?
+            } else {
+                self.llm.chat(messages.clone(), self.temperature, self.max_tokens).await?
+            };
+
+            total_input_tokens = total_input_tokens.saturating_add(resp.usage.input_tokens);
+            total_output_tokens = total_output_tokens.saturating_add(resp.usage.output_tokens);
+            last_text = resp.content.clone();
+
+            if resp.tool_calls.is_empty() || !tools_enabled {
+                final_text = resp.content;
+                break;
+            }
+
+            let tool_calls = resp.tool_calls.clone();
+            messages.push(Message {
+                role: MessageRole::Assistant,
+                content: None,
+                name: None,
+                tool_call_id: None,
+                tool_calls: Some(tool_calls.clone()),
+            });
+
+            for call in tool_calls {
+                let Some(executor) = executor else { break };
+                let result = executor.execute(call.clone()).await;
+                traces.push(ToolTrace {
+                    call: call.clone(),
+                    result: result.clone(),
+                });
+
+                let tool_payload = serde_json::json!({
+                    "ok": result.ok,
+                    "name": result.name,
+                    "output": result.output,
+                    "error": result.error
+                });
+                let tool_content = serde_json::to_string(&tool_payload).unwrap_or_else(|_| tool_payload.to_string());
+                messages.push(Message {
+                    role: MessageRole::Tool,
+                    content: Some(tool_content),
+                    name: None,
+                    tool_call_id: Some(result.tool_call_id.clone()),
+                    tool_calls: None,
+                });
+            }
+        }
+
+        if final_text.trim().is_empty() {
+            final_text = last_text;
+        }
+
+        let content = final_text.trim().to_string();
         self.opinions.push(content.clone());
         let wants_to_continue = should_continue(&content);
 
-        Ok(AgentResponse {
-            content,
-            confidence: 0.8,
-            wants_to_continue,
-            responding_to: None,
-            metadata: serde_json::json!({
-                "input_tokens": resp.usage.input_tokens,
-                "output_tokens": resp.usage.output_tokens
-            }),
-        })
+        Ok((
+            AgentResponse {
+                content,
+                confidence: 0.8,
+                wants_to_continue,
+                responding_to: None,
+                metadata: serde_json::json!({
+                    "input_tokens": total_input_tokens,
+                    "output_tokens": total_output_tokens
+                }),
+            },
+            traces,
+        ))
     }
 }
 

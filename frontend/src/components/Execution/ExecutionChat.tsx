@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { Loader2, User, Bot } from 'lucide-react'
+import { Loader2, User, Bot, Wrench } from 'lucide-react'
 import type { ExecutionMessage } from '@/types'
 
 interface Props {
@@ -51,22 +51,48 @@ export default function ExecutionChat({ messages, status, error }: Props) {
 function MessageBubble({ message }: { message: ExecutionMessage }) {
   const isUser = message.sender_type === 'user'
   const isSystem = message.sender_type === 'system'
+  const isTool = message.phase === 'tool_call' || message.phase === 'tool_result' || Boolean(message.sender_name?.startsWith('tool:'))
+
+  const toolMeta = (isTool ? (message.metadata as any) : null) as any
+  const toolName =
+    (toolMeta && typeof toolMeta === 'object' && toolMeta.tool_name ? String(toolMeta.tool_name) : null) ||
+    (message.sender_name?.startsWith('tool:') ? message.sender_name.slice('tool:'.length) : null) ||
+    'tool'
+  const toolStatus = message.phase === 'tool_result' ? ((toolMeta as any)?.ok === true ? 'OK' : (toolMeta as any)?.ok === false ? 'ERROR' : 'RESULT') : 'CALL'
+  const toolAgent = toolMeta?.agent_name ? String(toolMeta.agent_name) : null
+  const toolDuration = typeof toolMeta?.duration_ms === 'number' ? `${toolMeta.duration_ms}ms` : null
+  const toolError = toolMeta?.error ? String(toolMeta.error) : null
+
+  const jsonPreview = (value: unknown) => {
+    try {
+      const text = JSON.stringify(value, null, 2) || ''
+      if (text.length <= 6000) return text
+      return `${text.slice(0, 6000)}\n…(truncated)…`
+    } catch {
+      return String(value)
+    }
+  }
 
   return (
     <div className={`flex gap-4 ${isUser ? 'flex-row-reverse' : ''} group`}>
       <div className={`w-12 h-12 border-4 border-black flex items-center justify-center flex-shrink-0 shadow-pixel-sm ${
-        isUser ? 'bg-primary-600' : isSystem ? 'bg-gray-600' : 'bg-green-600'
+        isUser ? 'bg-primary-600' : isTool ? 'bg-purple-700' : isSystem ? 'bg-gray-600' : 'bg-green-600'
       }`}>
-        {isUser ? <User className="w-6 h-6 text-white" /> : <Bot className="w-6 h-6 text-white" />}
+        {isUser ? <User className="w-6 h-6 text-white" /> : isTool ? <Wrench className="w-6 h-6 text-white" /> : <Bot className="w-6 h-6 text-white" />}
       </div>
 
       <div className={`max-w-[85%] ${isUser ? 'text-right' : ''}`}>
         {message.sender_name && (
           <div className="text-[10px] font-press text-primary-400 mb-2 uppercase tracking-tighter">
-            {message.sender_name}
+            {isTool ? `${toolName}${toolAgent ? ` · ${toolAgent}` : ''}` : message.sender_name}
             {message.confidence && (
               <span className="ml-3 text-gray-500">
                 CONF: {Math.round(message.confidence * 100)}%
+              </span>
+            )}
+            {isTool && (
+              <span className="ml-3 text-gray-500">
+                {toolStatus}{toolDuration ? ` · ${toolDuration}` : ''}{toolError ? ` · ${toolError}` : ''}
               </span>
             )}
           </div>
@@ -74,11 +100,39 @@ function MessageBubble({ message }: { message: ExecutionMessage }) {
         <div className={`p-4 border-4 border-black shadow-pixel transition-transform group-hover:translate-x-[2px] group-hover:translate-y-[2px] group-hover:shadow-pixel-sm ${
           isUser
             ? 'bg-primary-600 text-white'
+            : isTool
+            ? 'bg-[#241a33] text-white'
             : isSystem
             ? 'bg-[#333] text-gray-400'
             : 'bg-[#2d2d2d] text-white'
         }`}>
-          <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
+          {isTool ? (
+            <details className="text-sm">
+              <summary className="cursor-pointer select-none whitespace-pre-wrap leading-relaxed">
+                {message.content || `${toolStatus} ${toolName}`}
+              </summary>
+              <div className="mt-3 space-y-3">
+                {message.phase === 'tool_call' && toolMeta?.arguments !== undefined && (
+                  <div>
+                    <div className="text-[10px] font-press text-gray-400 mb-2 uppercase tracking-tighter">ARGUMENTS</div>
+                    <pre className="whitespace-pre-wrap text-xs leading-relaxed bg-black/30 p-3 border-2 border-black overflow-x-auto">
+                      {jsonPreview(toolMeta.arguments)}
+                    </pre>
+                  </div>
+                )}
+                {message.phase === 'tool_result' && (
+                  <div>
+                    <div className="text-[10px] font-press text-gray-400 mb-2 uppercase tracking-tighter">OUTPUT</div>
+                    <pre className="whitespace-pre-wrap text-xs leading-relaxed bg-black/30 p-3 border-2 border-black overflow-x-auto">
+                      {jsonPreview(toolMeta?.ok === false ? { error: toolMeta?.error } : toolMeta?.output)}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            </details>
+          ) : (
+            <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
+          )}
         </div>
         <div className="text-[10px] font-press text-gray-500 mt-3 uppercase tracking-tighter">
           ROUND {message.round} · {message.phase}

@@ -26,6 +26,8 @@ thiserror = "2.0.9"
 anyhow = "1.0.95"
 async-trait = "0.1.83"
 url = "2.5.4"
+regex = "1"
+similar = "2"
 
 [features]
 # this feature is used for production builds or when a dev server is not specified, DO NOT REMOVE!!

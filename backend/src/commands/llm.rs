@@ -24,8 +24,10 @@ pub async fn test_llm(config: LLMRuntimeConfig, test_message: String) -> Result<
     let provider = provider_from_runtime_config(&config)?;
     let messages = vec![Message {
         role: MessageRole::User,
-        content: test_message,
+        content: Some(test_message),
         name: None,
+        tool_call_id: None,
+        tool_calls: None,
     }];
 
     let resp = provider.chat(messages, 0.2, 64).await?;

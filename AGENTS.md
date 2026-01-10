@@ -4,11 +4,12 @@
 - `backend/`: Tauri (Rust) desktop backend.
   - `backend/src/commands/`: Tauri `invoke` commands (agents/teams/executions/fs/llm).
   - `backend/src/orchestration/`: orchestration engines (roundtable/debate/pipeline) plus event/state types.
+  - `backend/src/tools/`: built-in tools + executor for agent tool-calling (file ops/search/text edits).
   - `backend/src/store/`: SQLite persistence (see `STORE_SQLITE_PATH`).
 - `frontend/`: React + TypeScript UI (Vite + Tailwind).
   - `frontend/src/pages/`, `frontend/src/components/`, `frontend/src/hooks/`, `frontend/src/services/`.
   - `frontend/public/`: static assets.
-- Docs: `README.md`, `MIGRATION_PLAN.md`.
+- Docs: `README.md`, `TOOL_CALLING_PLAN.md`, `GEMINI.md`.
 
 ## Build, Test, and Development Commands
 - Install deps: `npm --prefix frontend install` and `npm --prefix backend install`.
@@ -24,6 +25,7 @@
 
 ## Testing Guidelines
 - No formal test suite yet; validate changes by running `tauri:dev` and smoke-testing: CRUD Agents/Teams, start an Execution, verify streaming via the `execution-event` channel and workspace file operations.
+- Tool-calling is only enabled when an Execution has `workspace_path` set; tool activity streams as `tool_call` / `tool_result` events.
 - If you add tests, keep them close to the code (`#[cfg(test)]` in `backend/src/**`) and document how to run them.
 
 ## Commit & Pull Request Guidelines

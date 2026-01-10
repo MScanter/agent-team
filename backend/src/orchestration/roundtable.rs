@@ -3,12 +3,17 @@ use futures::{stream::FuturesUnordered, StreamExt};
 use crate::agents::instance::AgentInstance;
 use crate::error::AppError;
 use crate::orchestration::state::{Opinion, OrchestrationPhase, OrchestrationState};
+use crate::orchestration::tool_events::emit_tool_traces;
+use crate::tools::definition::ToolDefinition;
+use crate::tools::executor::ToolExecutor;
 
 pub async fn run_roundtable(
     mut agents: Vec<AgentInstance>,
     state: &mut OrchestrationState,
     emit: &mut impl FnMut(&str, serde_json::Value, Option<String>) -> Result<(), AppError>,
     enable_response_phase: bool,
+    tool_defs: &[ToolDefinition],
+    tool_executor: Option<ToolExecutor>,
 ) -> Result<Vec<AgentInstance>, AppError> {
     state.phase = OrchestrationPhase::Parallel;
     emit(
@@ -30,9 +35,13 @@ pub async fn run_roundtable(
         let topic = topic.clone();
         let summary = summary.clone();
         let recent = recent.clone();
+        let tool_executor = tool_executor.clone();
+        let tool_defs = tool_defs;
         tasks.push(async move {
             let mut agent = agent;
-            let res = agent.generate_opinion(&topic, &summary, &recent, "initial").await;
+            let res = agent
+                .generate_opinion_with_tools(&topic, &summary, &recent, "initial", tool_defs, tool_executor.as_ref())
+                .await;
             (agent, res)
         });
     }
@@ -41,9 +50,10 @@ pub async fn run_roundtable(
     let mut round_one = Vec::new();
     while let Some((agent, result)) = tasks.next().await {
         match result {
-            Ok(resp) => {
+            Ok((resp, traces)) => {
                 let agent_id = agent.id.clone();
                 let agent_name = agent.name.clone();
+                emit_tool_traces(emit, &traces, &agent_id, &agent_name, state.round)?;
                 let input_tokens = resp.metadata.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
                 let output_tokens = resp.metadata.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
                 let opinion = Opinion {
@@ -117,9 +127,13 @@ pub async fn run_roundtable(
         let topic = topic.clone();
         let summary = summary.clone();
         let context = round_one.clone();
+        let tool_executor = tool_executor.clone();
+        let tool_defs = tool_defs;
         tasks.push(async move {
             let mut agent = agent;
-            let res = agent.generate_opinion(&topic, &summary, &context, "response").await;
+            let res = agent
+                .generate_opinion_with_tools(&topic, &summary, &context, "response", tool_defs, tool_executor.as_ref())
+                .await;
             (agent, res)
         });
     }
@@ -127,9 +141,10 @@ pub async fn run_roundtable(
     let mut completed_agents = Vec::new();
     while let Some((agent, result)) = tasks.next().await {
         match result {
-            Ok(resp) => {
+            Ok((resp, traces)) => {
                 let agent_id = agent.id.clone();
                 let agent_name = agent.name.clone();
+                emit_tool_traces(emit, &traces, &agent_id, &agent_name, state.round)?;
                 let input_tokens = resp.metadata.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
                 let output_tokens = resp.metadata.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
                 let opinion = Opinion {

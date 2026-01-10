@@ -1,12 +1,17 @@
 use crate::agents::instance::AgentInstance;
 use crate::error::AppError;
 use crate::orchestration::state::{Opinion, OrchestrationPhase, OrchestrationState};
+use crate::orchestration::tool_events::emit_tool_traces;
+use crate::tools::definition::ToolDefinition;
+use crate::tools::executor::ToolExecutor;
 
 pub async fn run_debate(
     agents: Vec<AgentInstance>,
     state: &mut OrchestrationState,
     emit: &mut impl FnMut(&str, serde_json::Value, Option<String>) -> Result<(), AppError>,
     max_rounds: i32,
+    tool_defs: &[ToolDefinition],
+    tool_executor: Option<ToolExecutor>,
 ) -> Result<Vec<AgentInstance>, AppError> {
     state.phase = OrchestrationPhase::Initializing;
 
@@ -39,7 +44,10 @@ pub async fn run_debate(
     let pro_prompt = format!("论题：{}\n\n你是正方，请给出开场陈述。", state.topic);
     let mut pro_args = Vec::new();
     for agent in pro.iter_mut() {
-        let resp = agent.generate_opinion(&pro_prompt, "", &[], "initial").await?;
+        let (resp, traces) = agent
+            .generate_opinion_with_tools(&pro_prompt, "", &[], "initial", tool_defs, tool_executor.as_ref())
+            .await?;
+        emit_tool_traces(emit, &traces, &agent.id, &agent.name, state.round)?;
 
         let input_tokens = resp.metadata.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
         let output_tokens = resp.metadata.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
@@ -70,7 +78,10 @@ pub async fn run_debate(
 
     let con_prompt = format!("论题：{}\n\n你是反方，请回应正方并给出开场陈述。", state.topic);
     for agent in con.iter_mut() {
-        let resp = agent.generate_opinion(&con_prompt, "", &pro_args, "response").await?;
+        let (resp, traces) = agent
+            .generate_opinion_with_tools(&con_prompt, "", &pro_args, "response", tool_defs, tool_executor.as_ref())
+            .await?;
+        emit_tool_traces(emit, &traces, &agent.id, &agent.name, state.round)?;
         let input_tokens = resp.metadata.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
         let output_tokens = resp.metadata.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
         state.add_opinion(Opinion {
@@ -114,7 +125,10 @@ pub async fn run_debate(
             .collect::<Vec<_>>();
 
         for agent in pro.iter_mut() {
-            let resp = agent.generate_opinion(&state.topic, "", &last, "response").await?;
+            let (resp, traces) = agent
+                .generate_opinion_with_tools(&state.topic, "", &last, "response", tool_defs, tool_executor.as_ref())
+                .await?;
+            emit_tool_traces(emit, &traces, &agent.id, &agent.name, state.round)?;
             state.add_opinion(Opinion {
                 agent_id: agent.id.clone(),
                 agent_name: agent.name.clone(),
@@ -140,7 +154,10 @@ pub async fn run_debate(
         }
 
         for agent in con.iter_mut() {
-            let resp = agent.generate_opinion(&state.topic, "", &last, "response").await?;
+            let (resp, traces) = agent
+                .generate_opinion_with_tools(&state.topic, "", &last, "response", tool_defs, tool_executor.as_ref())
+                .await?;
+            emit_tool_traces(emit, &traces, &agent.id, &agent.name, state.round)?;
             state.add_opinion(Opinion {
                 agent_id: agent.id.clone(),
                 agent_name: agent.name.clone(),
@@ -188,7 +205,10 @@ pub async fn run_debate(
     );
 
     let mut judge = judge;
-    let verdict = judge.generate_opinion(&verdict_prompt, "", &[], "initial").await?;
+    let (verdict, traces) = judge
+        .generate_opinion_with_tools(&verdict_prompt, "", &[], "initial", tool_defs, tool_executor.as_ref())
+        .await?;
+    emit_tool_traces(emit, &traces, &judge.id, &judge.name, state.round)?;
 
     state.summary = verdict.content.clone();
     state.add_opinion(Opinion {

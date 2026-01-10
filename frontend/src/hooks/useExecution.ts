@@ -162,18 +162,32 @@ export function useExecutionSocket(executionId: string | null) {
       return
     }
 
-    if (data.event_type === 'opinion' || data.event_type === 'summary' || data.event_type === 'done') {
+    if (
+      data.event_type === 'opinion' ||
+      data.event_type === 'summary' ||
+      data.event_type === 'done' ||
+      data.event_type === 'tool_call' ||
+      data.event_type === 'tool_result'
+    ) {
+      const isTool = data.event_type === 'tool_call' || data.event_type === 'tool_result'
       const phase =
         (data.data.phase as string) ||
         (typeof data.data.stage === 'number' ? `stage_${data.data.stage}` : data.event_type)
+      const metadata = (() => {
+        if (isTool && data.data && typeof data.data === 'object') return data.data as any
+        const m = (data.data as any)?.metadata
+        if (m && typeof m === 'object') return m as any
+        return {}
+      })()
+      const toolName = isTool ? String((data.data as any)?.tool_name || 'tool') : null
       const msg: ExecutionMessage = {
         id: (data.data.message_id as string) || `${executionId}-${data.sequence}`,
         sequence: (data.data.message_sequence as number) || data.sequence,
         round: (data.data.round as number) || 0,
         phase,
-        sender_type: data.agent_id ? 'agent' : 'system',
+        sender_type: isTool ? 'system' : data.agent_id ? 'agent' : 'system',
         sender_id: data.agent_id,
-        sender_name: (data.data.agent_name as string) || (data.agent_id ? undefined : 'system'),
+        sender_name: isTool ? `tool:${toolName}` : (data.data.agent_name as string) || (data.agent_id ? undefined : 'system'),
         content:
           (data.data.content as string) ||
           (data.data.summary as string) ||
@@ -185,7 +199,7 @@ export function useExecutionSocket(executionId: string | null) {
         wants_to_continue: (data.data.wants_to_continue as boolean) ?? true,
         input_tokens: 0,
         output_tokens: 0,
-        metadata: {},
+        metadata,
         created_at: new Date().toISOString(),
       }
       setMessages((prev) => [...prev, msg])

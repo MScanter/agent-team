@@ -1,11 +1,16 @@
 use crate::agents::instance::AgentInstance;
 use crate::error::AppError;
 use crate::orchestration::state::{Opinion, OrchestrationPhase, OrchestrationState};
+use crate::orchestration::tool_events::emit_tool_traces;
+use crate::tools::definition::ToolDefinition;
+use crate::tools::executor::ToolExecutor;
 
 pub async fn run_pipeline(
     agents: Vec<AgentInstance>,
     state: &mut OrchestrationState,
     emit: &mut impl FnMut(&str, serde_json::Value, Option<String>) -> Result<(), AppError>,
+    tool_defs: &[ToolDefinition],
+    tool_executor: Option<ToolExecutor>,
 ) -> Result<Vec<AgentInstance>, AppError> {
     state.phase = OrchestrationPhase::Sequential;
     emit(
@@ -26,7 +31,10 @@ pub async fn run_pipeline(
             Some(agent.id.clone()),
         )?;
 
-        let resp = agent.generate_opinion(&current_input, "", &[], "initial").await?;
+        let (resp, traces) = agent
+            .generate_opinion_with_tools(&current_input, "", &[], "initial", tool_defs, tool_executor.as_ref())
+            .await?;
+        emit_tool_traces(emit, &traces, &agent.id, &agent.name, state.round)?;
 
         let input_tokens = resp.metadata.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
         let output_tokens = resp.metadata.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;

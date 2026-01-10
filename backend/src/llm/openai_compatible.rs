@@ -1,5 +1,6 @@
 use crate::error::AppError;
 use crate::llm::provider::{LLMProvider, LLMResponse, Message, TokenUsage};
+use crate::tools::definition::{ToolCall, ToolDefinition};
 use async_trait::async_trait;
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE, USER_AGENT};
 use serde::Deserialize;
@@ -98,6 +99,96 @@ impl LLMProvider for OpenAICompatibleProvider {
             },
             model: parsed.model.unwrap_or_else(|| self.model.clone()),
             finish_reason: choice.finish_reason.clone(),
+            tool_calls: Vec::new(),
+        })
+    }
+
+    async fn chat_with_tools(
+        &self,
+        messages: Vec<Message>,
+        tools: &[ToolDefinition],
+        temperature: f64,
+        max_tokens: u32,
+    ) -> Result<LLMResponse, AppError> {
+        let tool_defs = tools
+            .iter()
+            .map(|t| {
+                serde_json::json!({
+                    "type": "function",
+                    "function": {
+                        "name": t.name,
+                        "description": t.description,
+                        "parameters": t.parameters
+                    }
+                })
+            })
+            .collect::<Vec<_>>();
+
+        let openai_messages = messages
+            .into_iter()
+            .map(to_openai_message)
+            .collect::<Result<Vec<_>, AppError>>()?;
+
+        let body = serde_json::json!({
+            "model": self.model,
+            "messages": openai_messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "tools": tool_defs,
+            "tool_choice": "auto"
+        });
+
+        let resp = self
+            .client
+            .post(self.endpoint())
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| AppError::Message(e.to_string()))?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let text = resp.text().await.unwrap_or_else(|_| "".to_string());
+            return Err(AppError::Message(format!("OpenAI-compatible error: {status} {text}")));
+        }
+
+        let parsed: ChatResponse = resp
+            .json()
+            .await
+            .map_err(|e| AppError::Message(e.to_string()))?;
+
+        let choice = parsed
+            .choices
+            .get(0)
+            .ok_or_else(|| AppError::Message("No choices".to_string()))?;
+
+        let content = choice.message.content.clone().unwrap_or_default();
+        let tool_calls = choice
+            .message
+            .tool_calls
+            .clone()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|tc| {
+                let args_value = serde_json::from_str(&tc.function.arguments)
+                    .unwrap_or_else(|_| serde_json::Value::String(tc.function.arguments));
+                ToolCall {
+                    id: tc.id,
+                    name: tc.function.name,
+                    arguments: args_value,
+                }
+            })
+            .collect();
+
+        Ok(LLMResponse {
+            content,
+            usage: TokenUsage {
+                input_tokens: parsed.usage.as_ref().and_then(|u| u.prompt_tokens).unwrap_or(0),
+                output_tokens: parsed.usage.as_ref().and_then(|u| u.completion_tokens).unwrap_or(0),
+            },
+            model: parsed.model.unwrap_or_else(|| self.model.clone()),
+            finish_reason: choice.finish_reason.clone(),
+            tool_calls,
         })
     }
 }
@@ -118,12 +209,69 @@ struct ChatChoice {
 #[derive(Debug, Deserialize)]
 struct ChatMessage {
     pub content: Option<String>,
+    pub tool_calls: Option<Vec<OpenAIToolCall>>,
 }
 
 #[derive(Debug, Deserialize)]
 struct ChatUsage {
     pub prompt_tokens: Option<u32>,
     pub completion_tokens: Option<u32>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct OpenAIToolCall {
+    pub id: String,
+    #[allow(dead_code)]
+    #[serde(rename = "type")]
+    pub r#type: String,
+    pub function: OpenAIFunctionCall,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct OpenAIFunctionCall {
+    pub name: String,
+    pub arguments: String,
+}
+
+fn to_openai_message(msg: Message) -> Result<serde_json::Value, AppError> {
+    let role = match msg.role {
+        crate::llm::provider::MessageRole::System => "system",
+        crate::llm::provider::MessageRole::User => "user",
+        crate::llm::provider::MessageRole::Assistant => "assistant",
+        crate::llm::provider::MessageRole::Tool => "tool",
+    };
+
+    let mut out = serde_json::Map::new();
+    out.insert("role".to_string(), serde_json::Value::String(role.to_string()));
+    out.insert(
+        "content".to_string(),
+        msg.content.map(serde_json::Value::String).unwrap_or(serde_json::Value::Null),
+    );
+
+    if let Some(name) = msg.name {
+        out.insert("name".to_string(), serde_json::Value::String(name));
+    }
+
+    if let Some(tool_call_id) = msg.tool_call_id {
+        out.insert("tool_call_id".to_string(), serde_json::Value::String(tool_call_id));
+    }
+
+    if let Some(tool_calls) = msg.tool_calls {
+        let mapped = tool_calls
+            .into_iter()
+            .map(|tc| {
+                let args = serde_json::to_string(&tc.arguments).map_err(|e| AppError::Message(e.to_string()))?;
+                Ok(serde_json::json!({
+                    "id": tc.id,
+                    "type": "function",
+                    "function": { "name": tc.name, "arguments": args }
+                }))
+            })
+            .collect::<Result<Vec<_>, AppError>>()?;
+        out.insert("tool_calls".to_string(), serde_json::Value::Array(mapped));
+    }
+
+    Ok(serde_json::Value::Object(out))
 }
 
 pub fn normalize_openai_compatible_base_url(base_url: Option<String>) -> String {

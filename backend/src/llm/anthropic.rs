@@ -4,6 +4,7 @@ use serde::Deserialize;
 
 use crate::error::AppError;
 use crate::llm::provider::{LLMProvider, LLMResponse, Message, MessageRole, TokenUsage};
+use crate::tools::definition::{ToolCall, ToolDefinition};
 
 #[derive(Clone)]
 pub struct AnthropicProvider {
@@ -52,15 +53,81 @@ impl AnthropicProvider {
         let mut out = Vec::new();
         for msg in messages {
             match msg.role {
-                MessageRole::System => system = Some(msg.content),
-                MessageRole::User => out.push(serde_json::json!({"role": "user", "content": msg.content})),
-                MessageRole::Assistant => out.push(serde_json::json!({"role": "assistant", "content": msg.content})),
+                MessageRole::System => system = msg.content,
+                MessageRole::User => out.push(serde_json::json!({"role": "user", "content": msg.content.unwrap_or_default()})),
+                MessageRole::Assistant => out.push(serde_json::json!({"role": "assistant", "content": msg.content.unwrap_or_default()})),
                 MessageRole::Tool => {
                     // Tool messages are not supported in this minimal implementation; treat as user text.
-                    out.push(serde_json::json!({"role": "user", "content": msg.content}))
+                    out.push(serde_json::json!({"role": "user", "content": msg.content.unwrap_or_default()}))
                 }
             }
         }
+        (system, out)
+    }
+
+    fn convert_messages_with_tools(
+        &self,
+        messages: Vec<Message>,
+    ) -> (Option<String>, Vec<serde_json::Value>) {
+        let mut system_parts: Vec<String> = Vec::new();
+        let mut out = Vec::new();
+
+        for msg in messages {
+            match msg.role {
+                MessageRole::System => {
+                    if let Some(text) = msg.content {
+                        if !text.trim().is_empty() {
+                            system_parts.push(text);
+                        }
+                    }
+                }
+                MessageRole::User => {
+                    out.push(serde_json::json!({
+                        "role": "user",
+                        "content": [{ "type": "text", "text": msg.content.unwrap_or_default() }]
+                    }));
+                }
+                MessageRole::Assistant => {
+                    let mut blocks = Vec::new();
+                    if let Some(text) = msg.content {
+                        if !text.trim().is_empty() {
+                            blocks.push(serde_json::json!({ "type": "text", "text": text }));
+                        }
+                    }
+                    if let Some(tool_calls) = msg.tool_calls {
+                        for tc in tool_calls {
+                            blocks.push(serde_json::json!({
+                                "type": "tool_use",
+                                "id": tc.id,
+                                "name": tc.name,
+                                "input": tc.arguments
+                            }));
+                        }
+                    }
+                    if blocks.is_empty() {
+                        blocks.push(serde_json::json!({ "type": "text", "text": "" }));
+                    }
+                    out.push(serde_json::json!({ "role": "assistant", "content": blocks }));
+                }
+                MessageRole::Tool => {
+                    let tool_use_id = msg.tool_call_id.unwrap_or_default();
+                    out.push(serde_json::json!({
+                        "role": "user",
+                        "content": [{
+                            "type": "tool_result",
+                            "tool_use_id": tool_use_id,
+                            "content": msg.content.unwrap_or_default()
+                        }]
+                    }));
+                }
+            }
+        }
+
+        let system = if system_parts.is_empty() {
+            None
+        } else {
+            Some(system_parts.join("\n\n"))
+        };
         (system, out)
     }
 }
@@ -127,6 +194,94 @@ impl LLMProvider for AnthropicProvider {
             },
             model: parsed.model.unwrap_or_else(|| self.model.clone()),
             finish_reason: parsed.stop_reason,
+            tool_calls: Vec::new(),
+        })
+    }
+
+    async fn chat_with_tools(
+        &self,
+        messages: Vec<Message>,
+        tools: &[ToolDefinition],
+        temperature: f64,
+        max_tokens: u32,
+    ) -> Result<LLMResponse, AppError> {
+        if tools.is_empty() {
+            return self.chat(messages, temperature, max_tokens).await;
+        }
+
+        let (system, converted) = self.convert_messages_with_tools(messages);
+        let tool_defs = tools
+            .iter()
+            .map(|t| {
+                serde_json::json!({
+                    "name": t.name,
+                    "description": t.description,
+                    "input_schema": t.parameters
+                })
+            })
+            .collect::<Vec<_>>();
+
+        let mut body = serde_json::json!({
+            "model": self.model,
+            "messages": converted,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "tools": tool_defs
+        });
+        if let Some(system) = system {
+            body["system"] = serde_json::Value::String(system);
+        }
+
+        let resp = self
+            .client
+            .post(self.endpoint())
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| AppError::Message(e.to_string()))?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let text = resp.text().await.unwrap_or_else(|_| "".to_string());
+            return Err(AppError::Message(format!("Anthropic error: {status} {text}")));
+        }
+
+        let parsed: AnthropicMessageResponse = resp
+            .json()
+            .await
+            .map_err(|e| AppError::Message(e.to_string()))?;
+
+        let mut content = String::new();
+        let mut tool_calls: Vec<ToolCall> = Vec::new();
+        for block in parsed.content {
+            match block.r#type.as_str() {
+                "text" => {
+                    if let Some(text) = block.text {
+                        content.push_str(&text);
+                    }
+                }
+                "tool_use" => {
+                    if let (Some(id), Some(name), Some(input)) = (block.id, block.name, block.input) {
+                        tool_calls.push(ToolCall {
+                            id,
+                            name,
+                            arguments: input,
+                        });
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        Ok(LLMResponse {
+            content,
+            usage: TokenUsage {
+                input_tokens: parsed.usage.input_tokens.unwrap_or(0),
+                output_tokens: parsed.usage.output_tokens.unwrap_or(0),
+            },
+            model: parsed.model.unwrap_or_else(|| self.model.clone()),
+            finish_reason: parsed.stop_reason,
+            tool_calls,
         })
     }
 }
@@ -143,6 +298,9 @@ struct AnthropicMessageResponse {
 struct AnthropicContentBlock {
     pub r#type: String,
     pub text: Option<String>,
+    pub id: Option<String>,
+    pub name: Option<String>,
+    pub input: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize)]

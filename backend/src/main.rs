@@ -8,6 +8,7 @@ mod models;
 mod orchestration;
 mod store;
 mod state;
+mod tools;
 
 use tauri::Manager;
 use state::AppState;

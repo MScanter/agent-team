@@ -31,6 +31,15 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 
+# AI CLI tools config
+AGENTS.md
+CLAUDE.md
+.gemini/
+.cursor/
+.aider*
+.continue/
+copilot-*
+
 # Local SQLite (dev override)
 backend/data/*.db
 backend/data/*.db-*

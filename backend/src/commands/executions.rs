@@ -15,6 +15,7 @@ use crate::orchestration::pipeline::run_pipeline;
 use crate::orchestration::roundtable::run_roundtable;
 use crate::orchestration::state::OrchestrationState;
 use crate::state::AppState;
+use crate::tools::executor::ToolExecutor;
 
 const LOCAL_USER_ID: &str = "local";
 const EVENT_NAME: &str = "execution-event";
@@ -462,23 +463,82 @@ async fn run_round(
                 obj.insert("message_sequence".to_string(), serde_json::json!(message.sequence));
             }
             msg_seq += 1;
+        } else if event_type == "tool_call" || event_type == "tool_result" {
+            let tool_name = data.get("tool_name").and_then(|v| v.as_str()).unwrap_or("tool");
+            let content = data.get("content").and_then(|v| v.as_str()).unwrap_or("");
+            let round = data.get("round").and_then(|v| v.as_i64()).unwrap_or(round_num as i64) as i32;
+            let phase = data.get("phase").and_then(|v| v.as_str()).unwrap_or(event_type).to_string();
+            let now = Utc::now();
+            let message = ExecutionMessage {
+                id: Uuid::new_v4().to_string(),
+                sequence: msg_seq,
+                round,
+                phase: phase.clone(),
+                sender_type: "system".to_string(),
+                sender_id: agent_id.clone(),
+                sender_name: Some(format!("tool:{tool_name}")),
+                content: content.to_string(),
+                content_type: "text".to_string(),
+                responding_to: None,
+                target_agent_id: None,
+                confidence: None,
+                wants_to_continue: true,
+                input_tokens: 0,
+                output_tokens: 0,
+                metadata: data.clone(),
+                created_at: now,
+                updated_at: now,
+            };
+            store.execution_messages_upsert(&execution_id, &message)?;
+            if let Some(obj) = data.as_object_mut() {
+                obj.insert("message_id".to_string(), Value::String(message.id.clone()));
+                obj.insert("message_sequence".to_string(), serde_json::json!(message.sequence));
+            }
+            msg_seq += 1;
         }
 
         emit_event(&window, &execution_id, event_type, data, agent_id, event_seq);
         Ok(())
     };
 
+    let mut tool_defs = Vec::new();
+    let mut tool_executor: Option<ToolExecutor> = None;
+    if let Some(path) = execution
+        .workspace_path
+        .as_deref()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+    {
+        match ToolExecutor::new(std::path::PathBuf::from(path)) {
+            Ok(exec) => {
+                tool_defs = exec.definitions();
+                tool_executor = Some(exec);
+            }
+            Err(e) => {
+                emit(
+                    "status",
+                    serde_json::json!({
+                        "message": format!("Tool calling disabled: {e}"),
+                        "phase": "tooling_error",
+                        "round": state.round
+                    }),
+                    None,
+                )?;
+            }
+        }
+    }
+
     // Choose orchestrator
     match team.collaboration_mode.as_str() {
         "pipeline" => {
             state.phase = crate::orchestration::state::OrchestrationPhase::Sequential;
-            let _ = run_pipeline(agents, &mut state, &mut emit).await?;
+            let _ = run_pipeline(agents, &mut state, &mut emit, tool_defs.as_slice(), tool_executor.clone()).await?;
         }
         "debate" => {
-            let _ = run_debate(agents, &mut state, &mut emit, 3).await?;
+            let _ = run_debate(agents, &mut state, &mut emit, 3, tool_defs.as_slice(), tool_executor.clone()).await?;
         }
         _ => {
-            let _ = run_roundtable(agents, &mut state, &mut emit, true).await?;
+            let _ = run_roundtable(agents, &mut state, &mut emit, true, tool_defs.as_slice(), tool_executor.clone()).await?;
         }
     }
 
