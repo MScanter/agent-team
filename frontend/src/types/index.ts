@@ -184,6 +184,7 @@ export interface Execution {
   completed_at?: string
   error_message?: string
   recent_messages: ExecutionMessage[]
+  workspace_path?: string
   created_at: string
   updated_at: string
 }
@@ -223,6 +224,7 @@ export interface ExecutionCreate {
   title?: string
   budget?: BudgetConfig
   llm?: ExecutionLLMConfig
+  workspace_path?: string
 }
 
 export interface BudgetConfig {
@@ -242,6 +244,12 @@ export interface LLMRuntimeConfig {
   supports_vision?: boolean
   input_price_per_1k?: number
   output_price_per_1k?: number
+}
+
+export interface FileEntry {
+  path: string
+  is_dir: boolean
+  size?: number | null
 }
 
 export interface ExecutionLLMConfig {

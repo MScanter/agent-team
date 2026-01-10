@@ -6,6 +6,7 @@ import type {
   TestModelResponse 
 } from '@/types';
 import { api } from '@/services/api';
+import { isTauriApp, tauriInvoke } from '@/services/tauri';
 import {
   createModelConfig,
   deleteModelConfig,
@@ -99,6 +100,16 @@ export function useTestModelConfig() {
         },
         test_message: testMessage || 'Hello, can you hear me?',
       };
+
+      if (isTauriApp()) {
+        const response = await tauriInvoke<any>('test_llm', payload);
+        return {
+          message: response.message,
+          config_id: id,
+          response_preview: response.response_preview,
+          tokens_used: response.tokens_used,
+        };
+      }
 
       const response = await api.post('/llm/test', payload);
       return {

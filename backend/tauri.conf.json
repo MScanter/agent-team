@@ -1,0 +1,28 @@
+{
+  "$schema": "./node_modules/@tauri-apps/cli/schema.json",
+  "productName": "agent-team",
+  "version": "0.1.0",
+  "identifier": "com.agent-team.app",
+  "build": {
+    "beforeDevCommand": "npm --prefix ../frontend run dev",
+    "beforeBuildCommand": "npm --prefix ../frontend run build",
+    "devUrl": "http://localhost:3000",
+    "frontendDist": "../frontend/dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "agent-team",
+        "width": 1200,
+        "height": 800
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true
+  }
+}

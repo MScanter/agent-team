@@ -1,0 +1,32 @@
+[package]
+name = "agent-team"
+version = "0.1.0"
+description = "agent-team - Create and orchestrate AI agent teams (Tauri)"
+authors = ["you"]
+license = ""
+repository = ""
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.36.0", features = ["macros", "rt-multi-thread", "sync"] }
+reqwest = { version = "0.12.9", default-features = false, features = ["json", "rustls-tls"] }
+rusqlite = { version = "0.32.1", features = ["bundled"] }
+chrono = { version = "0.4.38", features = ["serde"] }
+uuid = { version = "1.11.0", features = ["v4", "serde"] }
+futures = "0.3.31"
+tokio-stream = "0.1.17"
+thiserror = "2.0.9"
+anyhow = "1.0.95"
+async-trait = "0.1.83"
+url = "2.5.4"
+
+[features]
+# this feature is used for production builds or when a dev server is not specified, DO NOT REMOVE!!
+custom-protocol = ["tauri/custom-protocol"]

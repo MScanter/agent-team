@@ -4,30 +4,26 @@ Single-machine (no auth) app to build agent teams and run discussions.
 
 ## Quickstart
 
-### Backend
+### Desktop (Tauri)
 
 ```bash
-cd backend
+# Prereqs:
+# - Rust toolchain (rustc/cargo)
+# - Node.js (npm)
 
-# Optional but recommended: use repo-local DB in development
-cp .env.example .env
+npm --prefix frontend install
+npm --prefix backend install
 
-# Run (uv auto-installs deps from pyproject.toml)
-uv run python -m app.main
+npm --prefix backend run tauri:dev
 ```
 
-Backend persists `agents / teams / model_configs / executions / messages` via SQLite (see `backend/README.md`).
-
-### Frontend
+Build release binary:
 
 ```bash
-cd frontend
-npm install
-npm run dev
+npm --prefix backend run tauri:build
 ```
 
 ## Development Notes
 
-- `STORE_SQLITE_PATH` can be set in `backend/.env` (auto-loaded) to control where SQLite lives.
-- `STORE_BACKEND=memory` disables persistence (useful for quick demos).
-- Execution streaming uses WebSocket at `/api/executions/{id}/ws`.
+- `STORE_SQLITE_PATH` can be set to control where SQLite lives (Tauri reads from env at launch).
+- Streaming: Tauri uses app event `execution-event`.

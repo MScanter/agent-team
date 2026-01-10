@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useExecution, useCreateExecution, useControlExecution, useDeleteExecution, useExecutionSocket } from '@/hooks'
 import { ExecutionChat } from '@/components/Execution'
 import { buildExecutionLLMConfig } from '@/services/modelConfigStore'
+import { isTauriApp } from '@/services/tauri'
+import ExecutionWorkspacePanel from '@/components/Execution/ExecutionWorkspacePanel'
 
 export default function ExecutionPage() {
   const navigate = useNavigate()
@@ -281,8 +283,16 @@ export default function ExecutionPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-hidden">
-        <ExecutionChat messages={displayMessages} status={streamStatus} error={streamError} />
+      <div className="flex-1 overflow-hidden flex">
+        {isTauriApp() && (
+          <ExecutionWorkspacePanel
+            executionId={executionId}
+            initialWorkspacePath={execution.workspace_path}
+          />
+        )}
+        <div className="flex-1 overflow-hidden">
+          <ExecutionChat messages={displayMessages} status={streamStatus} error={streamError} />
+        </div>
       </div>
 
       <div className="px-4 py-2 border-t border-gray-700 bg-gray-800/50">

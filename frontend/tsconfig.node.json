@@ -4,7 +4,8 @@
     "skipLibCheck": true,
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "types": ["node"]
+    "types": ["node"],
+    "outDir": "node_modules/.cache/tsc"
   },
   "include": ["vite.config.ts"]
 }
