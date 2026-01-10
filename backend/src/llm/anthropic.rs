@@ -9,7 +9,6 @@ use crate::llm::provider::{LLMProvider, LLMResponse, Message, MessageRole, Token
 pub struct AnthropicProvider {
     client: reqwest::Client,
     model: String,
-    api_key: String,
     base_url: String,
 }
 
@@ -40,7 +39,6 @@ impl AnthropicProvider {
         Ok(Self {
             client,
             model,
-            api_key,
             base_url,
         })
     }

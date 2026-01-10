@@ -37,7 +37,9 @@ pub struct LLMResponse {
 
 #[async_trait]
 pub trait LLMProvider: Send + Sync {
+    #[allow(dead_code)]
     fn provider_name(&self) -> &'static str;
+    #[allow(dead_code)]
     fn model_id(&self) -> &str;
 
     async fn chat(
@@ -47,4 +49,3 @@ pub trait LLMProvider: Send + Sync {
         max_tokens: u32,
     ) -> Result<LLMResponse, AppError>;
 }
-

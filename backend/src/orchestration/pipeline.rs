@@ -3,7 +3,7 @@ use crate::error::AppError;
 use crate::orchestration::state::{Opinion, OrchestrationPhase, OrchestrationState};
 
 pub async fn run_pipeline(
-    mut agents: Vec<AgentInstance>,
+    agents: Vec<AgentInstance>,
     state: &mut OrchestrationState,
     emit: &mut impl FnMut(&str, serde_json::Value, Option<String>) -> Result<(), AppError>,
 ) -> Result<Vec<AgentInstance>, AppError> {

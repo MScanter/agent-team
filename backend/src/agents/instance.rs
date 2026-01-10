@@ -10,9 +10,6 @@ pub struct AgentInstance {
     pub system_prompt: String,
     pub temperature: f64,
     pub max_tokens: u32,
-    pub domain: Option<String>,
-    pub collaboration_style: String,
-    pub speaking_priority: i32,
     llm: std::sync::Arc<dyn LLMProvider>,
     opinions: Vec<String>,
 }
@@ -38,9 +35,6 @@ impl AgentInstance {
             system_prompt: agent.system_prompt.clone(),
             temperature: agent.temperature,
             max_tokens: agent.max_tokens,
-            domain: agent.domain.clone(),
-            collaboration_style: agent.collaboration_style.clone(),
-            speaking_priority: agent.speaking_priority,
             llm,
             opinions: Vec::new(),
         }
