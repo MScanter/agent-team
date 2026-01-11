@@ -110,6 +110,25 @@ function AgentCard({
   onDelete: () => void
   onDuplicate: () => void
 }) {
+  const renderAvatar = () => {
+    const avatar = agent.avatar?.trim()
+    if (!avatar) return agent.name.charAt(0).toUpperCase()
+    const isImageSrc =
+      /^https?:\/\//.test(avatar) ||
+      avatar.startsWith('data:') ||
+      avatar.startsWith('blob:') ||
+      avatar.startsWith('/') ||
+      avatar.startsWith('./') ||
+      avatar.startsWith('../') ||
+      avatar.includes('/') ||
+      avatar.includes('\\') ||
+      avatar.includes('.')
+    if (isImageSrc) {
+      return <img src={avatar} alt={agent.name} className="w-full h-full object-cover rendering-pixelated" />
+    }
+    return <span className="text-3xl leading-none">{avatar}</span>
+  }
+
   return (
     <div className="card group hover:bg-[#3d3d3d] transition-all relative">
       <div className="absolute top-3 right-3">
@@ -133,11 +152,7 @@ function AgentCard({
 
       <div className="flex items-start mb-6 pr-8">
         <div className="w-16 h-16 border-4 border-black bg-primary-600 flex items-center justify-center text-white font-press text-2xl shadow-pixel-sm">
-          {agent.avatar ? (
-            <img src={agent.avatar} alt={agent.name} className="w-full h-full object-cover rendering-pixelated" />
-          ) : (
-            agent.name.charAt(0).toUpperCase()
-          )}
+          {renderAvatar()}
         </div>
         <div className="ml-4 flex-1">
           <h3 className="text-lg font-press text-white leading-tight mb-1">{agent.name}</h3>
@@ -152,16 +167,23 @@ function AgentCard({
       )}
 
       <div className="flex items-center justify-between text-[10px] font-press">
-        <span className={`px-2 py-1 border-2 border-black shadow-pixel-sm ${
-          agent.collaboration_style === 'dominant'
-            ? 'bg-red-600 text-white'
-            : agent.collaboration_style === 'critical'
-            ? 'bg-yellow-500 text-black'
-            : 'bg-green-500 text-white'
-        }`}>
-          {agent.collaboration_style === 'dominant' ? '主导型' :
-           agent.collaboration_style === 'critical' ? '批判型' : '支持型'}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className={`px-2 py-1 border-2 border-black shadow-pixel-sm ${
+            agent.collaboration_style === 'dominant'
+              ? 'bg-red-600 text-white'
+              : agent.collaboration_style === 'critical'
+              ? 'bg-yellow-500 text-black'
+              : 'bg-green-500 text-white'
+          }`}>
+            {agent.collaboration_style === 'dominant' ? '主导型' :
+             agent.collaboration_style === 'critical' ? '批判型' : '支持型'}
+          </span>
+          {agent.is_template && (
+            <span className="px-2 py-1 border-2 border-black shadow-pixel-sm bg-gray-700 text-white">
+              内置
+            </span>
+          )}
+        </div>
         <span className="text-gray-500 uppercase">USED: {agent.usage_count}</span>
       </div>
     </div>

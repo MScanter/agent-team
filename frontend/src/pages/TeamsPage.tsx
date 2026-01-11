@@ -127,6 +127,25 @@ function TeamCard({
   onDelete: () => void
   onStart: () => void
 }) {
+  const renderIcon = () => {
+    const icon = team.icon?.trim()
+    if (!icon) return <Users className="w-8 h-8 text-white" />
+    const isImageSrc =
+      /^https?:\/\//.test(icon) ||
+      icon.startsWith('data:') ||
+      icon.startsWith('blob:') ||
+      icon.startsWith('/') ||
+      icon.startsWith('./') ||
+      icon.startsWith('../') ||
+      icon.includes('/') ||
+      icon.includes('\\') ||
+      icon.includes('.')
+    if (isImageSrc) {
+      return <img src={icon} alt={team.name} className="w-10 h-10 rendering-pixelated" />
+    }
+    return <span className="text-3xl leading-none">{icon}</span>
+  }
+
   return (
     <div className="card group hover:bg-[#3d3d3d] transition-all relative">
       <div className="absolute top-3 right-3">
@@ -150,11 +169,7 @@ function TeamCard({
 
       <div className="flex items-start mb-6 pr-8">
         <div className="w-16 h-16 border-4 border-black bg-gradient-to-br from-primary-600 to-purple-600 flex items-center justify-center shadow-pixel-sm">
-          {team.icon ? (
-            <img src={team.icon} alt={team.name} className="w-10 h-10 rendering-pixelated" />
-          ) : (
-            <Users className="w-8 h-8 text-white" />
-          )}
+          {renderIcon()}
         </div>
         <div className="ml-4 flex-1">
           <h3 className="text-lg font-press text-white leading-tight mb-1">{team.name}</h3>
@@ -169,9 +184,16 @@ function TeamCard({
       )}
 
       <div className="flex items-center justify-between text-[10px] font-press">
-        <span className={`px-2 py-1 border-2 border-black shadow-pixel-sm ${modeColors[team.collaboration_mode] || modeColors.custom}`}>
-          {modeLabels[team.collaboration_mode] || team.collaboration_mode}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className={`px-2 py-1 border-2 border-black shadow-pixel-sm ${modeColors[team.collaboration_mode] || modeColors.custom}`}>
+            {modeLabels[team.collaboration_mode] || team.collaboration_mode}
+          </span>
+          {team.is_template && (
+            <span className="px-2 py-1 border-2 border-black shadow-pixel-sm bg-gray-700 text-white">
+              内置
+            </span>
+          )}
+        </div>
         <span className="text-gray-500 uppercase">USED: {team.usage_count}</span>
       </div>
     </div>

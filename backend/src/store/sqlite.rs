@@ -21,6 +21,34 @@ impl SqliteStore {
         Ok(Self { db_path })
     }
 
+    pub fn is_empty(&self) -> Result<bool, AppError> {
+        let conn = self.open()?;
+
+        let agents: Option<i32> = conn
+            .query_row("SELECT 1 FROM agents LIMIT 1;", [], |row| row.get(0))
+            .optional()?;
+        let teams: Option<i32> = conn
+            .query_row("SELECT 1 FROM teams LIMIT 1;", [], |row| row.get(0))
+            .optional()?;
+        let models: Option<i32> = conn
+            .query_row("SELECT 1 FROM model_configs LIMIT 1;", [], |row| row.get(0))
+            .optional()?;
+        let executions: Option<i32> = conn
+            .query_row("SELECT 1 FROM executions LIMIT 1;", [], |row| row.get(0))
+            .optional()?;
+        let messages: Option<i32> = conn
+            .query_row("SELECT 1 FROM execution_messages LIMIT 1;", [], |row| {
+                row.get(0)
+            })
+            .optional()?;
+
+        Ok(agents.is_none()
+            && teams.is_none()
+            && models.is_none()
+            && executions.is_none()
+            && messages.is_none())
+    }
+
     pub fn agents_list(&self) -> Result<Vec<Agent>, AppError> {
         self.list_table("agents")
     }

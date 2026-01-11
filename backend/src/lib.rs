@@ -4,6 +4,7 @@ pub mod error;
 pub mod llm;
 pub mod models;
 pub mod orchestration;
+pub mod seed;
 pub mod state;
 pub mod store;
 pub mod tools;

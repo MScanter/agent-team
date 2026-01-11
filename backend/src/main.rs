@@ -9,6 +9,7 @@ mod error;
 mod llm;
 mod models;
 mod orchestration;
+mod seed;
 mod state;
 mod store;
 mod tools;
