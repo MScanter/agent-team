@@ -8,4 +8,3 @@ pub struct OrchestrationEvent {
     #[serde(default)]
     pub agent_id: Option<String>,
 }
-

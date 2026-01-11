@@ -30,7 +30,13 @@ impl SqliteStore {
     }
 
     pub fn agents_upsert(&self, record: &Agent) -> Result<(), AppError> {
-        self.upsert_table("agents", &record.id, record, &record.created_at, &record.updated_at)
+        self.upsert_table(
+            "agents",
+            &record.id,
+            record,
+            &record.created_at,
+            &record.updated_at,
+        )
     }
 
     pub fn agents_delete(&self, agent_id: &str) -> Result<(), AppError> {
@@ -46,7 +52,13 @@ impl SqliteStore {
     }
 
     pub fn teams_upsert(&self, record: &Team) -> Result<(), AppError> {
-        self.upsert_table("teams", &record.id, record, &record.created_at, &record.updated_at)
+        self.upsert_table(
+            "teams",
+            &record.id,
+            record,
+            &record.created_at,
+            &record.updated_at,
+        )
     }
 
     pub fn teams_delete(&self, team_id: &str) -> Result<(), AppError> {
@@ -74,11 +86,17 @@ impl SqliteStore {
     pub fn executions_delete(&self, execution_id: &str) -> Result<(), AppError> {
         let conn = self.open()?;
         conn.execute("DELETE FROM executions WHERE id=?1;", params![execution_id])?;
-        conn.execute("DELETE FROM execution_messages WHERE execution_id=?1;", params![execution_id])?;
+        conn.execute(
+            "DELETE FROM execution_messages WHERE execution_id=?1;",
+            params![execution_id],
+        )?;
         Ok(())
     }
 
-    pub fn execution_messages_list(&self, execution_id: &str) -> Result<Vec<ExecutionMessage>, AppError> {
+    pub fn execution_messages_list(
+        &self,
+        execution_id: &str,
+    ) -> Result<Vec<ExecutionMessage>, AppError> {
         let conn = self.open()?;
         let mut stmt = conn.prepare(
             "SELECT data_json FROM execution_messages WHERE execution_id=?1 ORDER BY sequence;",
@@ -93,7 +111,11 @@ impl SqliteStore {
         Ok(messages)
     }
 
-    pub fn execution_messages_upsert(&self, execution_id: &str, message: &ExecutionMessage) -> Result<(), AppError> {
+    pub fn execution_messages_upsert(
+        &self,
+        execution_id: &str,
+        message: &ExecutionMessage,
+    ) -> Result<(), AppError> {
         let payload = serde_json::to_string(message)?;
         let conn = self.open()?;
         conn.execute(
@@ -150,7 +172,9 @@ impl SqliteStore {
     fn get_table<T: DeserializeOwned>(&self, table: &str, id: &str) -> Result<Option<T>, AppError> {
         let conn = self.open()?;
         let sql = format!("SELECT data_json FROM {table} WHERE id=?1;");
-        let json: Option<String> = conn.query_row(&sql, params![id], |row| row.get(0)).optional()?;
+        let json: Option<String> = conn
+            .query_row(&sql, params![id], |row| row.get(0))
+            .optional()?;
         match json {
             Some(j) => Ok(Some(serde_json::from_str(&j)?)),
             None => Ok(None),
@@ -178,7 +202,12 @@ impl SqliteStore {
         );
         conn.execute(
             &sql,
-            params![id, payload, created_at.to_rfc3339(), updated_at.to_rfc3339()],
+            params![
+                id,
+                payload,
+                created_at.to_rfc3339(),
+                updated_at.to_rfc3339()
+            ],
         )?;
         Ok(())
     }
@@ -303,4 +332,3 @@ fn expand_tilde(path: PathBuf) -> PathBuf {
     }
     path
 }
-

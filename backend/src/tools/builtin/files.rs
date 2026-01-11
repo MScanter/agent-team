@@ -30,7 +30,9 @@ pub fn list_files(root: &Path, dir: Option<&str>) -> Result<Vec<FileEntry>, AppE
     let mut entries = Vec::new();
     for entry in std::fs::read_dir(&target).map_err(|e| AppError::Message(e.to_string()))? {
         let entry = entry.map_err(|e| AppError::Message(e.to_string()))?;
-        let meta = entry.metadata().map_err(|e| AppError::Message(e.to_string()))?;
+        let meta = entry
+            .metadata()
+            .map_err(|e| AppError::Message(e.to_string()))?;
         let path = entry.path();
         let rel = path
             .strip_prefix(&root)
@@ -40,7 +42,11 @@ pub fn list_files(root: &Path, dir: Option<&str>) -> Result<Vec<FileEntry>, AppE
         entries.push(FileEntry {
             path: rel,
             is_dir: meta.is_dir(),
-            size: if meta.is_file() { Some(meta.len()) } else { None },
+            size: if meta.is_file() {
+                Some(meta.len())
+            } else {
+                None
+            },
         });
     }
 
@@ -53,7 +59,15 @@ pub fn list_files(root: &Path, dir: Option<&str>) -> Result<Vec<FileEntry>, AppE
     Ok(entries)
 }
 
-pub fn read_file(root: &Path, path: &str, max_bytes: u64) -> Result<(String, bool), AppError> {
+pub fn read_file(
+    root: &Path,
+    path: &str,
+    offset: Option<u64>,
+    limit: Option<u64>,
+    max_bytes: u64,
+) -> Result<(String, u64, bool), AppError> {
+    use std::io::{Read, Seek, SeekFrom};
+
     let root = security::canonicalize_root(root)?;
     let rel = security::validate_relative_path(path)?;
     let full = security::resolve_existing_path(&root, &rel)?;
@@ -62,9 +76,41 @@ pub fn read_file(root: &Path, path: &str, max_bytes: u64) -> Result<(String, boo
         return Err(AppError::Message("Path is not a file".to_string()));
     }
 
-    let truncated = meta.len() > max_bytes;
-    let (text, _lossy) = security::read_to_string_limited(&full, max_bytes)?;
-    Ok((text, truncated))
+    let total_size = meta.len();
+    let offset = offset.unwrap_or(0);
+    if offset >= total_size {
+        return Ok((String::new(), total_size, false));
+    }
+
+    let requested_limit = limit.unwrap_or(max_bytes);
+    let effective_limit = requested_limit.min(max_bytes);
+    if effective_limit == 0 {
+        return Ok((String::new(), total_size, true));
+    }
+
+    if offset == 0 {
+        let truncated = total_size > effective_limit;
+        let (text, _lossy) = security::read_to_string_limited(&full, effective_limit)?;
+        return Ok((text, total_size, truncated));
+    }
+
+    let mut file = std::fs::File::open(&full).map_err(|e| AppError::Message(e.to_string()))?;
+    file.seek(SeekFrom::Start(offset))
+        .map_err(|e| AppError::Message(e.to_string()))?;
+
+    let mut buf = Vec::new();
+    let mut handle = file.take(effective_limit);
+    handle
+        .read_to_end(&mut buf)
+        .map_err(|e| AppError::Message(e.to_string()))?;
+
+    let truncated = offset.saturating_add(buf.len() as u64) < total_size;
+    let text = match String::from_utf8(buf) {
+        Ok(s) => s,
+        Err(e) => String::from_utf8_lossy(e.as_bytes()).to_string(),
+    };
+
+    Ok((text, total_size, truncated))
 }
 
 pub fn write_file(root: &Path, path: &str, content: &str) -> Result<(), AppError> {
@@ -111,7 +157,9 @@ pub fn delete_file(root: &Path, path: &str) -> Result<(), AppError> {
     if meta.is_dir() {
         let mut it = std::fs::read_dir(&full).map_err(|e| AppError::Message(e.to_string()))?;
         if it.next().is_some() {
-            return Err(AppError::Message("Refusing to delete non-empty directory".to_string()));
+            return Err(AppError::Message(
+                "Refusing to delete non-empty directory".to_string(),
+            ));
         }
         std::fs::remove_dir(&full).map_err(|e| AppError::Message(e.to_string()))?;
         return Ok(());
@@ -130,4 +178,3 @@ pub fn rename_file(root: &Path, old_path: &str, new_path: &str) -> Result<(), Ap
     std::fs::rename(src, dst).map_err(|e| AppError::Message(e.to_string()))?;
     Ok(())
 }
-

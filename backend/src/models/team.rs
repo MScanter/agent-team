@@ -175,4 +175,3 @@ fn default_output_format() -> String {
 fn default_collaboration_mode() -> String {
     "roundtable".to_string()
 }
-

@@ -5,7 +5,9 @@ use crate::error::AppError;
 pub fn validate_relative_path(input: &str) -> Result<PathBuf, AppError> {
     let p = Path::new(input);
     if p.is_absolute() {
-        return Err(AppError::Message("Absolute paths are not allowed".to_string()));
+        return Err(AppError::Message(
+            "Absolute paths are not allowed".to_string(),
+        ));
     }
 
     let mut out = PathBuf::new();
@@ -14,7 +16,9 @@ pub fn validate_relative_path(input: &str) -> Result<PathBuf, AppError> {
             Component::Normal(seg) => out.push(seg),
             Component::CurDir => {}
             Component::ParentDir => {
-                return Err(AppError::Message("Parent dir '..' is not allowed".to_string()));
+                return Err(AppError::Message(
+                    "Parent dir '..' is not allowed".to_string(),
+                ));
             }
             Component::RootDir | Component::Prefix(_) => {
                 return Err(AppError::Message("Invalid path component".to_string()));
@@ -37,38 +41,52 @@ pub fn ensure_safe_dir(root: &Path, rel_dir: &Path) -> Result<PathBuf, AppError>
     for component in rel_dir.components() {
         current.push(component);
         if current.exists() {
-            let meta = std::fs::symlink_metadata(&current).map_err(|e| AppError::Message(e.to_string()))?;
+            let meta = std::fs::symlink_metadata(&current)
+                .map_err(|e| AppError::Message(e.to_string()))?;
             if meta.file_type().is_symlink() {
-                return Err(AppError::Message("Symlinks are not allowed in workspace paths".to_string()));
+                return Err(AppError::Message(
+                    "Symlinks are not allowed in workspace paths".to_string(),
+                ));
             }
             if !meta.is_dir() {
-                return Err(AppError::Message("Path component is not a directory".to_string()));
+                return Err(AppError::Message(
+                    "Path component is not a directory".to_string(),
+                ));
             }
         } else {
             std::fs::create_dir(&current).map_err(|e| AppError::Message(e.to_string()))?;
         }
     }
 
-    let canonical = current.canonicalize().map_err(|e| AppError::Message(e.to_string()))?;
+    let canonical = current
+        .canonicalize()
+        .map_err(|e| AppError::Message(e.to_string()))?;
     ensure_within_root(root, &canonical)?;
     Ok(canonical)
 }
 
 pub fn canonicalize_root(root: &Path) -> Result<PathBuf, AppError> {
-    let canonical = root.canonicalize().map_err(|e| AppError::Message(e.to_string()))?;
+    let canonical = root
+        .canonicalize()
+        .map_err(|e| AppError::Message(e.to_string()))?;
     if !canonical.is_dir() {
-        return Err(AppError::Message("Workspace root is not a directory".to_string()));
+        return Err(AppError::Message(
+            "Workspace root is not a directory".to_string(),
+        ));
     }
     Ok(canonical)
 }
 
 pub fn resolve_existing_path(root: &Path, rel: &Path) -> Result<PathBuf, AppError> {
     let candidate = root.join(rel);
-    let meta = std::fs::symlink_metadata(&candidate).map_err(|e| AppError::Message(e.to_string()))?;
+    let meta =
+        std::fs::symlink_metadata(&candidate).map_err(|e| AppError::Message(e.to_string()))?;
     if meta.file_type().is_symlink() {
         return Err(AppError::Message("Symlinks are not allowed".to_string()));
     }
-    let canonical = candidate.canonicalize().map_err(|e| AppError::Message(e.to_string()))?;
+    let canonical = candidate
+        .canonicalize()
+        .map_err(|e| AppError::Message(e.to_string()))?;
     ensure_within_root(root, &canonical)?;
     Ok(canonical)
 }
@@ -84,9 +102,12 @@ pub fn resolve_write_path(root: &Path, rel: &Path) -> Result<PathBuf, AppError> 
     ensure_within_root(root, &full)?;
 
     if full.exists() {
-        let meta = std::fs::symlink_metadata(&full).map_err(|e| AppError::Message(e.to_string()))?;
+        let meta =
+            std::fs::symlink_metadata(&full).map_err(|e| AppError::Message(e.to_string()))?;
         if meta.file_type().is_symlink() {
-            return Err(AppError::Message("Refusing to write through symlink".to_string()));
+            return Err(AppError::Message(
+                "Refusing to write through symlink".to_string(),
+            ));
         }
     }
 
@@ -99,7 +120,9 @@ pub fn read_to_string_limited(path: &Path, max_bytes: u64) -> Result<(String, bo
     let file = std::fs::File::open(path).map_err(|e| AppError::Message(e.to_string()))?;
     let mut buf = Vec::new();
     let mut handle = file.take(max_bytes);
-    handle.read_to_end(&mut buf).map_err(|e| AppError::Message(e.to_string()))?;
+    handle
+        .read_to_end(&mut buf)
+        .map_err(|e| AppError::Message(e.to_string()))?;
 
     match String::from_utf8(buf) {
         Ok(s) => Ok((s, false)),

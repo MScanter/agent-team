@@ -55,4 +55,3 @@ pub fn emit_tool_traces(
     }
     Ok(())
 }
-

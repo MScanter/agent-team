@@ -5,7 +5,9 @@ use uuid::Uuid;
 
 use crate::error::AppError;
 use crate::models::common::{PaginatedResponse, SuccessResponse};
-use crate::models::team::{Team, TeamCreate, TeamListItem, TeamMember, TeamMemberCreate, TeamUpdate};
+use crate::models::team::{
+    Team, TeamCreate, TeamListItem, TeamMember, TeamMemberCreate, TeamUpdate,
+};
 use crate::state::AppState;
 
 const LOCAL_USER_ID: &str = "local";
@@ -34,8 +36,7 @@ pub fn list_teams(
             .into_iter()
             .filter(|t| {
                 t.name.to_lowercase().contains(&needle)
-                    || t
-                        .description
+                    || t.description
                         .as_ref()
                         .map(|d| d.to_lowercase().contains(&needle))
                         .unwrap_or(false)
@@ -68,7 +69,11 @@ pub fn list_teams(
 
     let start = (page - 1) * page_size;
     let end = (start + page_size).min(total);
-    let slice = if start >= total { &[] } else { &teams[start..end] };
+    let slice = if start >= total {
+        &[]
+    } else {
+        &teams[start..end]
+    };
 
     let items = slice
         .iter()
@@ -135,7 +140,11 @@ pub fn create_team(state: State<AppState>, team: TeamCreate) -> Result<Team, App
 }
 
 #[tauri::command]
-pub fn update_team(state: State<AppState>, id: String, update: TeamUpdate) -> Result<Team, AppError> {
+pub fn update_team(
+    state: State<AppState>,
+    id: String,
+    update: TeamUpdate,
+) -> Result<Team, AppError> {
     let mut existing = state
         .store
         .teams_get(&id)?
@@ -188,7 +197,11 @@ pub fn delete_team(state: State<AppState>, id: String) -> Result<SuccessResponse
 }
 
 #[tauri::command]
-pub fn duplicate_team(state: State<AppState>, id: String, new_name: Option<String>) -> Result<Team, AppError> {
+pub fn duplicate_team(
+    state: State<AppState>,
+    id: String,
+    new_name: Option<String>,
+) -> Result<Team, AppError> {
     let original = state
         .store
         .teams_get(&id)?
@@ -258,13 +271,7 @@ pub fn add_team_member(
     }
 
     let now = Utc::now();
-    let next_pos = team
-        .members
-        .iter()
-        .map(|m| m.position)
-        .max()
-        .unwrap_or(-1)
-        + 1;
+    let next_pos = team.members.iter().map(|m| m.position).max().unwrap_or(-1) + 1;
     let record = TeamMember {
         id: Uuid::new_v4().to_string(),
         agent_id: member.agent_id,
@@ -285,7 +292,11 @@ pub fn add_team_member(
 }
 
 #[tauri::command]
-pub fn remove_team_member(state: State<AppState>, team_id: String, agent_id: String) -> Result<SuccessResponse, AppError> {
+pub fn remove_team_member(
+    state: State<AppState>,
+    team_id: String,
+    agent_id: String,
+) -> Result<SuccessResponse, AppError> {
     let mut team = state
         .store
         .teams_get(&team_id)?
@@ -306,7 +317,11 @@ pub fn remove_team_member(state: State<AppState>, team_id: String, agent_id: Str
 }
 
 #[tauri::command]
-pub fn reorder_team_members(state: State<AppState>, team_id: String, agent_ids: Vec<String>) -> Result<SuccessResponse, AppError> {
+pub fn reorder_team_members(
+    state: State<AppState>,
+    team_id: String,
+    agent_ids: Vec<String>,
+) -> Result<SuccessResponse, AppError> {
     let mut team = state
         .store
         .teams_get(&team_id)?
@@ -315,7 +330,9 @@ pub fn reorder_team_members(state: State<AppState>, team_id: String, agent_ids: 
     let mut seen = std::collections::HashSet::new();
     for id in &agent_ids {
         if !seen.insert(id.clone()) {
-            return Err(AppError::Message("agent_ids contains duplicates".to_string()));
+            return Err(AppError::Message(
+                "agent_ids contains duplicates".to_string(),
+            ));
         }
     }
 
@@ -328,7 +345,9 @@ pub fn reorder_team_members(state: State<AppState>, team_id: String, agent_ids: 
 
     for (idx, agent_id) in agent_ids.iter().enumerate() {
         let Some(mut member) = by_agent.get(agent_id).cloned() else {
-            return Err(AppError::Message(format!("Unknown agent_id in team: {agent_id}")));
+            return Err(AppError::Message(format!(
+                "Unknown agent_id in team: {agent_id}"
+            )));
         };
         member.position = idx as i32;
         by_agent.insert(agent_id.clone(), member);
@@ -359,7 +378,11 @@ pub fn reorder_team_members(state: State<AppState>, team_id: String, agent_ids: 
     })
 }
 
-fn build_members(members: Vec<TeamMemberCreate>, existing: &[TeamMember], now: chrono::DateTime<Utc>) -> Vec<TeamMember> {
+fn build_members(
+    members: Vec<TeamMemberCreate>,
+    existing: &[TeamMember],
+    now: chrono::DateTime<Utc>,
+) -> Vec<TeamMember> {
     let existing_by_agent: std::collections::HashMap<String, &TeamMember> =
         existing.iter().map(|m| (m.agent_id.clone(), m)).collect();
 
@@ -408,4 +431,3 @@ fn merge_json(a: &Value, b: &Value) -> Value {
     }
     out
 }
-

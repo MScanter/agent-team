@@ -32,12 +32,32 @@ pub async fn run_pipeline(
         )?;
 
         let (resp, traces) = agent
-            .generate_opinion_with_tools(&current_input, "", &[], "initial", tool_defs, tool_executor.as_ref())
+            .generate_opinion_with_tools(
+                &current_input,
+                "",
+                &[],
+                "initial",
+                tool_defs,
+                tool_executor.as_ref(),
+            )
             .await?;
         emit_tool_traces(emit, &traces, &agent.id, &agent.name, state.round)?;
 
-        let input_tokens = resp.metadata.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
-        let output_tokens = resp.metadata.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+        let input_tokens = resp
+            .metadata
+            .get("input_tokens")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0) as u32;
+        let output_tokens = resp
+            .metadata
+            .get("output_tokens")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0) as u32;
+        let tokens_estimated = resp
+            .metadata
+            .get("tokens_estimated")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
 
         let opinion = Opinion {
             agent_id: agent.id.clone(),
@@ -45,7 +65,6 @@ pub async fn run_pipeline(
             content: resp.content.clone(),
             round: state.round,
             phase: format!("stage_{stage}"),
-            confidence: resp.confidence,
             wants_to_continue: true,
             responding_to: None,
             input_tokens,
@@ -61,6 +80,9 @@ pub async fn run_pipeline(
                 "round": state.round,
                 "phase": format!("stage_{stage}"),
                 "stage": stage,
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "tokens_estimated": tokens_estimated,
                 "metadata": resp.metadata
             }),
             Some(agent.id.clone()),

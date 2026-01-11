@@ -34,8 +34,7 @@ pub fn list_agents(
             .into_iter()
             .filter(|a| {
                 a.name.to_lowercase().contains(&needle)
-                    || a
-                        .description
+                    || a.description
                         .as_ref()
                         .map(|d| d.to_lowercase().contains(&needle))
                         .unwrap_or(false)
@@ -83,7 +82,11 @@ pub fn list_agents(
 
     let start = (page - 1) * page_size;
     let end = (start + page_size).min(total);
-    let slice = if start >= total { &[] } else { &agents[start..end] };
+    let slice = if start >= total {
+        &[]
+    } else {
+        &agents[start..end]
+    };
 
     let items = slice
         .iter()
@@ -134,6 +137,7 @@ pub fn create_agent(state: State<AppState>, agent: AgentCreate) -> Result<Agent,
         model_id: agent.model_id,
         temperature: agent.temperature,
         max_tokens: agent.max_tokens,
+        max_tool_iterations: agent.max_tool_iterations,
         tools: agent.tools,
         knowledge_base_id: agent.knowledge_base_id,
         memory_enabled: agent.memory_enabled,
@@ -156,7 +160,11 @@ pub fn create_agent(state: State<AppState>, agent: AgentCreate) -> Result<Agent,
 }
 
 #[tauri::command]
-pub fn update_agent(state: State<AppState>, id: String, update: AgentUpdate) -> Result<Agent, AppError> {
+pub fn update_agent(
+    state: State<AppState>,
+    id: String,
+    update: AgentUpdate,
+) -> Result<Agent, AppError> {
     let mut existing = state
         .store
         .agents_get(&id)?
@@ -185,6 +193,9 @@ pub fn update_agent(state: State<AppState>, id: String, update: AgentUpdate) -> 
     }
     if let Some(v) = update.max_tokens {
         existing.max_tokens = v;
+    }
+    if let Some(v) = update.max_tool_iterations {
+        existing.max_tool_iterations = Some(v);
     }
     if let Some(v) = update.tools {
         existing.tools = v;
@@ -249,6 +260,7 @@ pub fn duplicate_agent(
         model_id: original.model_id.clone(),
         temperature: original.temperature,
         max_tokens: original.max_tokens,
+        max_tool_iterations: original.max_tool_iterations,
         tools: original.tools.clone(),
         knowledge_base_id: original.knowledge_base_id.clone(),
         memory_enabled: original.memory_enabled,
@@ -270,4 +282,3 @@ pub fn duplicate_agent(
     state.store.agents_upsert(&record)?;
     Ok(record)
 }
-

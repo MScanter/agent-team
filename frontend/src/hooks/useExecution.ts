@@ -111,10 +111,10 @@ export function useExecutionSocket(executionId: string | null) {
         sender_name: 'you',
         content: (data.data.content as string) || '',
         content_type: 'text',
-        confidence: undefined,
         wants_to_continue: true,
         input_tokens: 0,
         output_tokens: 0,
+        tokens_estimated: false,
         metadata: {},
         created_at: new Date().toISOString(),
       }
@@ -146,10 +146,10 @@ export function useExecutionSocket(executionId: string | null) {
           sender_name: 'system',
           content: (data.data.message as string) || JSON.stringify(data.data),
           content_type: 'text',
-          confidence: undefined,
           wants_to_continue: true,
           input_tokens: 0,
           output_tokens: 0,
+          tokens_estimated: false,
           metadata: {},
           created_at: new Date().toISOString(),
         }
@@ -180,6 +180,18 @@ export function useExecutionSocket(executionId: string | null) {
         return {}
       })()
       const toolName = isTool ? String((data.data as any)?.tool_name || 'tool') : null
+      const inputTokens =
+        (typeof (data.data as any)?.input_tokens === 'number' ? (data.data as any).input_tokens : null) ??
+        (typeof (metadata as any)?.input_tokens === 'number' ? (metadata as any).input_tokens : null) ??
+        0
+      const outputTokens =
+        (typeof (data.data as any)?.output_tokens === 'number' ? (data.data as any).output_tokens : null) ??
+        (typeof (metadata as any)?.output_tokens === 'number' ? (metadata as any).output_tokens : null) ??
+        0
+      const tokensEstimated =
+        (typeof (data.data as any)?.tokens_estimated === 'boolean' ? (data.data as any).tokens_estimated : null) ??
+        (typeof (metadata as any)?.tokens_estimated === 'boolean' ? (metadata as any).tokens_estimated : null) ??
+        false
       const msg: ExecutionMessage = {
         id: (data.data.message_id as string) || `${executionId}-${data.sequence}`,
         sequence: (data.data.message_sequence as number) || data.sequence,
@@ -195,10 +207,10 @@ export function useExecutionSocket(executionId: string | null) {
           (data.data.final_summary as string) ||
           '',
         content_type: 'text',
-        confidence: data.data.confidence as number,
         wants_to_continue: (data.data.wants_to_continue as boolean) ?? true,
-        input_tokens: 0,
-        output_tokens: 0,
+        input_tokens: isTool ? 0 : inputTokens,
+        output_tokens: isTool ? 0 : outputTokens,
+        tokens_estimated: isTool ? false : tokensEstimated,
         metadata,
         created_at: new Date().toISOString(),
       }

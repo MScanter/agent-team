@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-use crate::models::agent::Agent;
 use crate::llm::provider::{LLMProvider, Message, MessageRole};
+use crate::models::agent::Agent;
 use crate::tools::definition::{ToolDefinition, ToolTrace};
 use crate::tools::executor::ToolExecutor;
 
@@ -12,6 +12,7 @@ pub struct AgentInstance {
     pub system_prompt: String,
     pub temperature: f64,
     pub max_tokens: u32,
+    pub max_tool_iterations: u32,
     llm: std::sync::Arc<dyn LLMProvider>,
     opinions: Vec<String>,
 }
@@ -19,8 +20,6 @@ pub struct AgentInstance {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentResponse {
     pub content: String,
-    #[serde(default = "default_confidence")]
-    pub confidence: f64,
     #[serde(default = "default_true")]
     pub wants_to_continue: bool,
     #[serde(default)]
@@ -37,6 +36,7 @@ impl AgentInstance {
             system_prompt: agent.system_prompt.clone(),
             temperature: agent.temperature,
             max_tokens: agent.max_tokens,
+            max_tool_iterations: agent.max_tool_iterations.unwrap_or(10).clamp(1, 50),
             llm,
             opinions: Vec::new(),
         }
@@ -56,7 +56,10 @@ impl AgentInstance {
         if !recent_opinions.is_empty() {
             let mut lines = Vec::new();
             for op in recent_opinions {
-                let agent_name = op.get("agent_name").and_then(|v| v.as_str()).unwrap_or("unknown");
+                let agent_name = op
+                    .get("agent_name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown");
                 let content = op.get("content").and_then(|v| v.as_str()).unwrap_or("");
                 lines.push(format!("- **{agent_name}**: {content}"));
             }
@@ -65,7 +68,10 @@ impl AgentInstance {
 
         if !self.opinions.is_empty() {
             let start = self.opinions.len().saturating_sub(3);
-            let mine: Vec<String> = self.opinions[start..].iter().map(|s| format!("- {s}")).collect();
+            let mine: Vec<String> = self.opinions[start..]
+                .iter()
+                .map(|s| format!("- {s}"))
+                .collect();
             parts.push(format!("## 你之前的观点\n{}", mine.join("\n")));
         }
 
@@ -91,7 +97,14 @@ impl AgentInstance {
         phase: &str,
     ) -> Result<AgentResponse, crate::error::AppError> {
         let (resp, _traces) = self
-            .generate_opinion_with_tools(topic, discussion_summary, recent_opinions, phase, &[], None)
+            .generate_opinion_with_tools(
+                topic,
+                discussion_summary,
+                recent_opinions,
+                phase,
+                &[],
+                None,
+            )
             .await?;
         Ok(resp)
     }
@@ -148,8 +161,9 @@ impl AgentInstance {
         let mut traces: Vec<ToolTrace> = Vec::new();
         let mut total_input_tokens: u32 = 0;
         let mut total_output_tokens: u32 = 0;
+        let mut tokens_estimated: bool = false;
 
-        let max_iters: usize = 10;
+        let max_iters: usize = self.max_tool_iterations.max(1).min(50) as usize;
         let mut final_text = String::new();
         let mut last_text = String::new();
         for _ in 0..max_iters {
@@ -158,11 +172,14 @@ impl AgentInstance {
                     .chat_with_tools(messages.clone(), tools, self.temperature, self.max_tokens)
                     .await?
             } else {
-                self.llm.chat(messages.clone(), self.temperature, self.max_tokens).await?
+                self.llm
+                    .chat(messages.clone(), self.temperature, self.max_tokens)
+                    .await?
             };
 
             total_input_tokens = total_input_tokens.saturating_add(resp.usage.input_tokens);
             total_output_tokens = total_output_tokens.saturating_add(resp.usage.output_tokens);
+            tokens_estimated = tokens_estimated || resp.usage.estimated;
             last_text = resp.content.clone();
 
             if resp.tool_calls.is_empty() || !tools_enabled {
@@ -193,7 +210,8 @@ impl AgentInstance {
                     "output": result.output,
                     "error": result.error
                 });
-                let tool_content = serde_json::to_string(&tool_payload).unwrap_or_else(|_| tool_payload.to_string());
+                let tool_content = serde_json::to_string(&tool_payload)
+                    .unwrap_or_else(|_| tool_payload.to_string());
                 messages.push(Message {
                     role: MessageRole::Tool,
                     content: Some(tool_content),
@@ -215,12 +233,12 @@ impl AgentInstance {
         Ok((
             AgentResponse {
                 content,
-                confidence: 0.8,
                 wants_to_continue,
                 responding_to: None,
                 metadata: serde_json::json!({
                     "input_tokens": total_input_tokens,
-                    "output_tokens": total_output_tokens
+                    "output_tokens": total_output_tokens,
+                    "tokens_estimated": tokens_estimated
                 }),
             },
             traces,
@@ -244,10 +262,6 @@ fn should_continue(content: &str) -> bool {
         }
     }
     true
-}
-
-fn default_confidence() -> f64 {
-    0.8
 }
 
 fn default_true() -> bool {

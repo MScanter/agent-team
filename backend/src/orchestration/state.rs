@@ -28,8 +28,6 @@ pub struct Opinion {
     pub content: String,
     pub round: i32,
     pub phase: String,
-    #[serde(default = "default_confidence")]
-    pub confidence: f64,
     #[serde(default = "default_true")]
     pub wants_to_continue: bool,
     #[serde(default)]
@@ -94,10 +92,6 @@ impl OrchestrationState {
             .map(|op| serde_json::json!({"agent_name": op.agent_name.clone(), "content": op.content.clone(), "agent_id": op.agent_id.clone()}))
             .collect()
     }
-}
-
-fn default_confidence() -> f64 {
-    0.8
 }
 
 fn default_true() -> bool {

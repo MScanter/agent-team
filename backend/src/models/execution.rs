@@ -59,10 +59,13 @@ pub struct ExecutionMessage {
     pub content_type: String,
     pub responding_to: Option<String>,
     pub target_agent_id: Option<String>,
-    pub confidence: Option<f64>,
     pub wants_to_continue: bool,
-    pub input_tokens: i32,
-    pub output_tokens: i32,
+    #[serde(default)]
+    pub input_tokens: u32,
+    #[serde(default)]
+    pub output_tokens: u32,
+    #[serde(default)]
+    pub tokens_estimated: bool,
     #[serde(default)]
     pub metadata: Value,
     pub created_at: DateTime<Utc>,
@@ -185,4 +188,3 @@ fn default_max_cost() -> f64 {
 fn default_warning_thresholds() -> Vec<f64> {
     vec![0.5, 0.8, 0.95]
 }
-

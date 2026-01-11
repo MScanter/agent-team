@@ -1,5 +1,5 @@
 use crate::error::AppError;
-use crate::llm::provider::{LLMProvider, LLMResponse, Message, TokenUsage};
+use crate::llm::provider::{estimate_tokens, LLMProvider, LLMResponse, Message, TokenUsage};
 use crate::tools::definition::{ToolCall, ToolDefinition};
 use async_trait::async_trait;
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE, USER_AGENT};
@@ -18,7 +18,8 @@ impl OpenAICompatibleProvider {
         let mut headers = HeaderMap::new();
         headers.insert(
             AUTHORIZATION,
-            HeaderValue::from_str(&format!("Bearer {}", api_key)).map_err(|e| AppError::Message(e.to_string()))?,
+            HeaderValue::from_str(&format!("Bearer {}", api_key))
+                .map_err(|e| AppError::Message(e.to_string()))?,
         );
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
         headers.insert(
@@ -80,7 +81,9 @@ impl LLMProvider for OpenAICompatibleProvider {
         if !resp.status().is_success() {
             let status = resp.status();
             let text = resp.text().await.unwrap_or_else(|_| "".to_string());
-            return Err(AppError::Message(format!("OpenAI-compatible error: {status} {text}")));
+            return Err(AppError::Message(format!(
+                "OpenAI-compatible error: {status} {text}"
+            )));
         }
 
         let parsed: ChatResponse = resp
@@ -88,14 +91,24 @@ impl LLMProvider for OpenAICompatibleProvider {
             .await
             .map_err(|e| AppError::Message(e.to_string()))?;
 
-        let choice = parsed.choices.get(0).ok_or_else(|| AppError::Message("No choices".to_string()))?;
+        let choice = parsed
+            .choices
+            .get(0)
+            .ok_or_else(|| AppError::Message("No choices".to_string()))?;
         let content = choice.message.content.clone().unwrap_or_default();
+
+        let prompt_tokens = parsed.usage.as_ref().and_then(|u| u.prompt_tokens);
+        let completion_tokens = parsed.usage.as_ref().and_then(|u| u.completion_tokens);
+        let estimated = prompt_tokens.is_none() || completion_tokens.is_none();
 
         Ok(LLMResponse {
             content,
             usage: TokenUsage {
-                input_tokens: parsed.usage.as_ref().and_then(|u| u.prompt_tokens).unwrap_or(0),
-                output_tokens: parsed.usage.as_ref().and_then(|u| u.completion_tokens).unwrap_or(0),
+                input_tokens: prompt_tokens.unwrap_or_else(|| estimate_tokens(&body.to_string())),
+                output_tokens: completion_tokens.unwrap_or_else(|| {
+                    estimate_tokens(&choice.message.content.clone().unwrap_or_default())
+                }),
+                estimated,
             },
             model: parsed.model.unwrap_or_else(|| self.model.clone()),
             finish_reason: choice.finish_reason.clone(),
@@ -149,7 +162,9 @@ impl LLMProvider for OpenAICompatibleProvider {
         if !resp.status().is_success() {
             let status = resp.status();
             let text = resp.text().await.unwrap_or_else(|_| "".to_string());
-            return Err(AppError::Message(format!("OpenAI-compatible error: {status} {text}")));
+            return Err(AppError::Message(format!(
+                "OpenAI-compatible error: {status} {text}"
+            )));
         }
 
         let parsed: ChatResponse = resp
@@ -163,7 +178,7 @@ impl LLMProvider for OpenAICompatibleProvider {
             .ok_or_else(|| AppError::Message("No choices".to_string()))?;
 
         let content = choice.message.content.clone().unwrap_or_default();
-        let tool_calls = choice
+        let tool_calls: Vec<ToolCall> = choice
             .message
             .tool_calls
             .clone()
@@ -180,11 +195,26 @@ impl LLMProvider for OpenAICompatibleProvider {
             })
             .collect();
 
+        let prompt_tokens = parsed.usage.as_ref().and_then(|u| u.prompt_tokens);
+        let completion_tokens = parsed.usage.as_ref().and_then(|u| u.completion_tokens);
+        let estimated = prompt_tokens.is_none() || completion_tokens.is_none();
+
+        let output_estimate_text = if tool_calls.is_empty() {
+            content.clone()
+        } else {
+            format!(
+                "{content}\n{}",
+                serde_json::to_string(&tool_calls).unwrap_or_default()
+            )
+        };
+
         Ok(LLMResponse {
             content,
             usage: TokenUsage {
-                input_tokens: parsed.usage.as_ref().and_then(|u| u.prompt_tokens).unwrap_or(0),
-                output_tokens: parsed.usage.as_ref().and_then(|u| u.completion_tokens).unwrap_or(0),
+                input_tokens: prompt_tokens.unwrap_or_else(|| estimate_tokens(&body.to_string())),
+                output_tokens: completion_tokens
+                    .unwrap_or_else(|| estimate_tokens(&output_estimate_text)),
+                estimated,
             },
             model: parsed.model.unwrap_or_else(|| self.model.clone()),
             finish_reason: choice.finish_reason.clone(),
@@ -242,10 +272,15 @@ fn to_openai_message(msg: Message) -> Result<serde_json::Value, AppError> {
     };
 
     let mut out = serde_json::Map::new();
-    out.insert("role".to_string(), serde_json::Value::String(role.to_string()));
+    out.insert(
+        "role".to_string(),
+        serde_json::Value::String(role.to_string()),
+    );
     out.insert(
         "content".to_string(),
-        msg.content.map(serde_json::Value::String).unwrap_or(serde_json::Value::Null),
+        msg.content
+            .map(serde_json::Value::String)
+            .unwrap_or(serde_json::Value::Null),
     );
 
     if let Some(name) = msg.name {
@@ -253,14 +288,18 @@ fn to_openai_message(msg: Message) -> Result<serde_json::Value, AppError> {
     }
 
     if let Some(tool_call_id) = msg.tool_call_id {
-        out.insert("tool_call_id".to_string(), serde_json::Value::String(tool_call_id));
+        out.insert(
+            "tool_call_id".to_string(),
+            serde_json::Value::String(tool_call_id),
+        );
     }
 
     if let Some(tool_calls) = msg.tool_calls {
         let mapped = tool_calls
             .into_iter()
             .map(|tc| {
-                let args = serde_json::to_string(&tc.arguments).map_err(|e| AppError::Message(e.to_string()))?;
+                let args = serde_json::to_string(&tc.arguments)
+                    .map_err(|e| AppError::Message(e.to_string()))?;
                 Ok(serde_json::json!({
                     "id": tc.id,
                     "type": "function",
@@ -276,7 +315,9 @@ fn to_openai_message(msg: Message) -> Result<serde_json::Value, AppError> {
 
 pub fn normalize_openai_compatible_base_url(base_url: Option<String>) -> String {
     let default_url = "https://api.openai.com/v1".to_string();
-    let Some(mut base) = base_url else { return default_url };
+    let Some(mut base) = base_url else {
+        return default_url;
+    };
     base = base.trim().to_string();
     if base.is_empty() {
         return default_url;
@@ -285,7 +326,10 @@ pub fn normalize_openai_compatible_base_url(base_url: Option<String>) -> String 
     // Users sometimes paste full endpoint.
     let trimmed = base.trim_end_matches('/');
     if trimmed.ends_with("/chat/completions") {
-        base = trimmed.strip_suffix("/chat/completions").unwrap_or(trimmed).to_string();
+        base = trimmed
+            .strip_suffix("/chat/completions")
+            .unwrap_or(trimmed)
+            .to_string();
     }
 
     // Only append /v1 when no path provided.

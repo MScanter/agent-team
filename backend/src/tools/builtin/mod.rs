@@ -23,13 +23,18 @@ pub fn definitions() -> Vec<ToolDefinition> {
             description: "Read a UTF-8 text file under the execution workspace.".to_string(),
             parameters: json!({
                 "type": "object",
-                "properties": { "path": { "type": "string" } },
+                "properties": {
+                    "path": { "type": "string" },
+                    "offset": { "type": "integer", "minimum": 0, "description": "Start byte offset (optional)." },
+                    "limit": { "type": "integer", "minimum": 1, "description": "Max bytes to read (optional)." }
+                },
                 "required": ["path"]
             }),
         },
         ToolDefinition {
             name: "write_file".to_string(),
-            description: "Write or create a UTF-8 text file under the execution workspace.".to_string(),
+            description: "Write or create a UTF-8 text file under the execution workspace."
+                .to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": { "path": { "type": "string" }, "content": { "type": "string" } },
@@ -38,7 +43,8 @@ pub fn definitions() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: "delete_file".to_string(),
-            description: "Delete a file (or empty directory) under the execution workspace.".to_string(),
+            description: "Delete a file (or empty directory) under the execution workspace."
+                .to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": { "path": { "type": "string" } },
@@ -65,7 +71,8 @@ pub fn definitions() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: "search_content".to_string(),
-            description: "Search file contents under the workspace using a regular expression.".to_string(),
+            description: "Search file contents under the workspace using a regular expression."
+                .to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -90,7 +97,8 @@ pub fn definitions() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: "get_file_info".to_string(),
-            description: "Get file metadata (size, modified time, type) under the workspace.".to_string(),
+            description: "Get file metadata (size, modified time, type) under the workspace."
+                .to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": { "path": { "type": "string" } },
@@ -108,7 +116,8 @@ pub fn definitions() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: "diff_files".to_string(),
-            description: "Compute a unified diff between two text files under the workspace.".to_string(),
+            description: "Compute a unified diff between two text files under the workspace."
+                .to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": { "path1": { "type": "string" }, "path2": { "type": "string" } },
@@ -117,7 +126,8 @@ pub fn definitions() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: "find_definition".to_string(),
-            description: "Find likely function/class/type definitions by name (regex-based).".to_string(),
+            description: "Find likely function/class/type definitions by name (regex-based)."
+                .to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -129,7 +139,8 @@ pub fn definitions() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: "find_references".to_string(),
-            description: "Find references by name (word-boundary regex) under the workspace.".to_string(),
+            description: "Find references by name (word-boundary regex) under the workspace."
+                .to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -208,4 +219,3 @@ pub fn definitions() -> Vec<ToolDefinition> {
         },
     ]
 }
-

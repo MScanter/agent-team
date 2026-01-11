@@ -3,7 +3,9 @@ use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE, USER_AGENT};
 use serde::Deserialize;
 
 use crate::error::AppError;
-use crate::llm::provider::{LLMProvider, LLMResponse, Message, MessageRole, TokenUsage};
+use crate::llm::provider::{
+    estimate_tokens, LLMProvider, LLMResponse, Message, MessageRole, TokenUsage,
+};
 use crate::tools::definition::{ToolCall, ToolDefinition};
 
 #[derive(Clone)]
@@ -21,7 +23,10 @@ impl AnthropicProvider {
             .to_string();
 
         let mut headers = HeaderMap::new();
-        headers.insert("x-api-key", HeaderValue::from_str(&api_key).map_err(|e| AppError::Message(e.to_string()))?);
+        headers.insert(
+            "x-api-key",
+            HeaderValue::from_str(&api_key).map_err(|e| AppError::Message(e.to_string()))?,
+        );
         headers.insert("anthropic-version", HeaderValue::from_static("2023-06-01"));
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
         headers.insert(
@@ -171,7 +176,9 @@ impl LLMProvider for AnthropicProvider {
         if !resp.status().is_success() {
             let status = resp.status();
             let text = resp.text().await.unwrap_or_else(|_| "".to_string());
-            return Err(AppError::Message(format!("Anthropic error: {status} {text}")));
+            return Err(AppError::Message(format!(
+                "Anthropic error: {status} {text}"
+            )));
         }
 
         let parsed: AnthropicMessageResponse = resp
@@ -186,11 +193,18 @@ impl LLMProvider for AnthropicProvider {
             }
         }
 
+        let prompt_tokens = parsed.usage.input_tokens;
+        let completion_tokens = parsed.usage.output_tokens;
+        let estimated = prompt_tokens.is_none() || completion_tokens.is_none();
+        let input_tokens = prompt_tokens.unwrap_or_else(|| estimate_tokens(&body.to_string()));
+        let output_tokens = completion_tokens.unwrap_or_else(|| estimate_tokens(&content));
+
         Ok(LLMResponse {
             content,
             usage: TokenUsage {
-                input_tokens: parsed.usage.input_tokens.unwrap_or(0),
-                output_tokens: parsed.usage.output_tokens.unwrap_or(0),
+                input_tokens,
+                output_tokens,
+                estimated,
             },
             model: parsed.model.unwrap_or_else(|| self.model.clone()),
             finish_reason: parsed.stop_reason,
@@ -243,7 +257,9 @@ impl LLMProvider for AnthropicProvider {
         if !resp.status().is_success() {
             let status = resp.status();
             let text = resp.text().await.unwrap_or_else(|_| "".to_string());
-            return Err(AppError::Message(format!("Anthropic error: {status} {text}")));
+            return Err(AppError::Message(format!(
+                "Anthropic error: {status} {text}"
+            )));
         }
 
         let parsed: AnthropicMessageResponse = resp
@@ -261,7 +277,8 @@ impl LLMProvider for AnthropicProvider {
                     }
                 }
                 "tool_use" => {
-                    if let (Some(id), Some(name), Some(input)) = (block.id, block.name, block.input) {
+                    if let (Some(id), Some(name), Some(input)) = (block.id, block.name, block.input)
+                    {
                         tool_calls.push(ToolCall {
                             id,
                             name,
@@ -273,11 +290,26 @@ impl LLMProvider for AnthropicProvider {
             }
         }
 
+        let prompt_tokens = parsed.usage.input_tokens;
+        let completion_tokens = parsed.usage.output_tokens;
+        let estimated = prompt_tokens.is_none() || completion_tokens.is_none();
+
+        let output_estimate_text = if tool_calls.is_empty() {
+            content.clone()
+        } else {
+            format!(
+                "{content}\n{}",
+                serde_json::to_string(&tool_calls).unwrap_or_default()
+            )
+        };
+
         Ok(LLMResponse {
             content,
             usage: TokenUsage {
-                input_tokens: parsed.usage.input_tokens.unwrap_or(0),
-                output_tokens: parsed.usage.output_tokens.unwrap_or(0),
+                input_tokens: prompt_tokens.unwrap_or_else(|| estimate_tokens(&body.to_string())),
+                output_tokens: completion_tokens
+                    .unwrap_or_else(|| estimate_tokens(&output_estimate_text)),
+                estimated,
             },
             model: parsed.model.unwrap_or_else(|| self.model.clone()),
             finish_reason: parsed.stop_reason,

@@ -73,7 +73,15 @@ pub fn find_references(
 ) -> Result<Vec<CodeMatch>, AppError> {
     let escaped = regex::escape(name);
     let pattern = format!(r"\b{escaped}\b");
-    let matches = search::search_content(root, &pattern, path, Some(default_code_file_pattern()), max_matches, max_files, max_read_bytes)?;
+    let matches = search::search_content(
+        root,
+        &pattern,
+        path,
+        Some(default_code_file_pattern()),
+        max_matches,
+        max_files,
+        max_read_bytes,
+    )?;
     Ok(matches
         .into_iter()
         .map(|m| CodeMatch {
@@ -84,14 +92,22 @@ pub fn find_references(
         .collect())
 }
 
-pub fn list_functions(root: &Path, path: &str, max_read_bytes: u64) -> Result<Vec<CodeMatch>, AppError> {
+pub fn list_functions(
+    root: &Path,
+    path: &str,
+    max_read_bytes: u64,
+) -> Result<Vec<CodeMatch>, AppError> {
     let root = security::canonicalize_root(root)?;
     let rel = security::validate_relative_path(path)?;
     let full = security::resolve_existing_path(&root, &rel)?;
     let file_name = full.file_name().and_then(|s| s.to_str()).unwrap_or("");
-    let ext = Path::new(file_name).extension().and_then(|s| s.to_str()).unwrap_or("");
+    let ext = Path::new(file_name)
+        .extension()
+        .and_then(|s| s.to_str())
+        .unwrap_or("");
 
-    let (text, _trunc) = crate::tools::builtin::files::read_file(&root, path, max_read_bytes)?;
+    let (text, _total_size, _truncated) =
+        crate::tools::builtin::files::read_file(&root, path, None, None, max_read_bytes)?;
 
     let rx = match ext {
         "rs" => Regex::new(r"^\s*(pub\s+)?(async\s+)?fn\s+([A-Za-z0-9_]+)\b").unwrap(),
@@ -113,8 +129,13 @@ pub fn list_functions(root: &Path, path: &str, max_read_bytes: u64) -> Result<Ve
     Ok(out)
 }
 
-pub fn list_imports(root: &Path, path: &str, max_read_bytes: u64) -> Result<Vec<CodeMatch>, AppError> {
-    let (text, _trunc) = crate::tools::builtin::files::read_file(root, path, max_read_bytes)?;
+pub fn list_imports(
+    root: &Path,
+    path: &str,
+    max_read_bytes: u64,
+) -> Result<Vec<CodeMatch>, AppError> {
+    let (text, _total_size, _truncated) =
+        crate::tools::builtin::files::read_file(root, path, None, None, max_read_bytes)?;
     let mut out = Vec::new();
     for (idx, line) in text.lines().enumerate() {
         let l = line.trim();

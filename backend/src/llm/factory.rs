@@ -6,9 +6,13 @@ use crate::llm::openai_compatible::OpenAICompatibleProvider;
 use crate::llm::provider::LLMProvider;
 use crate::models::llm::{ExecutionLLMConfig, LLMRuntimeConfig, ProviderKind};
 
-pub fn provider_from_runtime_config(cfg: &LLMRuntimeConfig) -> Result<Arc<dyn LLMProvider>, AppError> {
+pub fn provider_from_runtime_config(
+    cfg: &LLMRuntimeConfig,
+) -> Result<Arc<dyn LLMProvider>, AppError> {
     if cfg.api_key.trim().is_empty() {
-        return Err(AppError::Message("Model config is missing api_key".to_string()));
+        return Err(AppError::Message(
+            "Model config is missing api_key".to_string(),
+        ));
     }
 
     let provider: Arc<dyn LLMProvider> = match &cfg.provider {

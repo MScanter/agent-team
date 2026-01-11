@@ -14,7 +14,11 @@ pub struct FileEntry {
 }
 
 #[tauri::command]
-pub fn list_files(state: State<AppState>, execution_id: String, dir: Option<String>) -> Result<Vec<FileEntry>, AppError> {
+pub fn list_files(
+    state: State<AppState>,
+    execution_id: String,
+    dir: Option<String>,
+) -> Result<Vec<FileEntry>, AppError> {
     let root = workspace_root(&state, &execution_id)?;
     let root = root
         .canonicalize()
@@ -37,7 +41,9 @@ pub fn list_files(state: State<AppState>, execution_id: String, dir: Option<Stri
     let mut entries = Vec::new();
     for entry in std::fs::read_dir(&target).map_err(|e| AppError::Message(e.to_string()))? {
         let entry = entry.map_err(|e| AppError::Message(e.to_string()))?;
-        let meta = entry.metadata().map_err(|e| AppError::Message(e.to_string()))?;
+        let meta = entry
+            .metadata()
+            .map_err(|e| AppError::Message(e.to_string()))?;
         let path = entry.path();
         let rel = path
             .strip_prefix(&root)
@@ -47,7 +53,11 @@ pub fn list_files(state: State<AppState>, execution_id: String, dir: Option<Stri
         entries.push(FileEntry {
             path: rel,
             is_dir: meta.is_dir(),
-            size: if meta.is_file() { Some(meta.len()) } else { None },
+            size: if meta.is_file() {
+                Some(meta.len())
+            } else {
+                None
+            },
         });
     }
 
@@ -61,7 +71,11 @@ pub fn list_files(state: State<AppState>, execution_id: String, dir: Option<Stri
 }
 
 #[tauri::command]
-pub fn read_file(state: State<AppState>, execution_id: String, path: String) -> Result<String, AppError> {
+pub fn read_file(
+    state: State<AppState>,
+    execution_id: String,
+    path: String,
+) -> Result<String, AppError> {
     let root = workspace_root(&state, &execution_id)?;
     let root = root
         .canonicalize()
@@ -78,7 +92,12 @@ pub fn read_file(state: State<AppState>, execution_id: String, path: String) -> 
 }
 
 #[tauri::command]
-pub fn write_file(state: State<AppState>, execution_id: String, path: String, content: String) -> Result<(), AppError> {
+pub fn write_file(
+    state: State<AppState>,
+    execution_id: String,
+    path: String,
+    content: String,
+) -> Result<(), AppError> {
     let root = workspace_root(&state, &execution_id)?;
     let root = root
         .canonicalize()
@@ -95,9 +114,12 @@ pub fn write_file(state: State<AppState>, execution_id: String, path: String, co
     ensure_within_root(&root, &full)?;
 
     if full.exists() {
-        let meta = std::fs::symlink_metadata(&full).map_err(|e| AppError::Message(e.to_string()))?;
+        let meta =
+            std::fs::symlink_metadata(&full).map_err(|e| AppError::Message(e.to_string()))?;
         if meta.file_type().is_symlink() {
-            return Err(AppError::Message("Refusing to write through symlink".to_string()));
+            return Err(AppError::Message(
+                "Refusing to write through symlink".to_string(),
+            ));
         }
     }
 
@@ -124,7 +146,9 @@ fn workspace_root(state: &State<AppState>, execution_id: &str) -> Result<PathBuf
 fn validate_relative_path(input: &str) -> Result<PathBuf, AppError> {
     let p = Path::new(input);
     if p.is_absolute() {
-        return Err(AppError::Message("Absolute paths are not allowed".to_string()));
+        return Err(AppError::Message(
+            "Absolute paths are not allowed".to_string(),
+        ));
     }
 
     let mut out = PathBuf::new();
@@ -133,7 +157,9 @@ fn validate_relative_path(input: &str) -> Result<PathBuf, AppError> {
             Component::Normal(seg) => out.push(seg),
             Component::CurDir => {}
             Component::ParentDir => {
-                return Err(AppError::Message("Parent dir '..' is not allowed".to_string()))
+                return Err(AppError::Message(
+                    "Parent dir '..' is not allowed".to_string(),
+                ))
             }
             Component::RootDir | Component::Prefix(_) => {
                 return Err(AppError::Message("Invalid path component".to_string()))
@@ -156,13 +182,17 @@ fn ensure_safe_dir(root: &Path, rel_dir: &Path) -> Result<PathBuf, AppError> {
     for component in rel_dir.components() {
         current.push(component);
         if current.exists() {
-            let meta =
-                std::fs::symlink_metadata(&current).map_err(|e| AppError::Message(e.to_string()))?;
+            let meta = std::fs::symlink_metadata(&current)
+                .map_err(|e| AppError::Message(e.to_string()))?;
             if meta.file_type().is_symlink() {
-                return Err(AppError::Message("Symlinks are not allowed in workspace paths".to_string()));
+                return Err(AppError::Message(
+                    "Symlinks are not allowed in workspace paths".to_string(),
+                ));
             }
             if !meta.is_dir() {
-                return Err(AppError::Message("Path component is not a directory".to_string()));
+                return Err(AppError::Message(
+                    "Path component is not a directory".to_string(),
+                ));
             }
         } else {
             std::fs::create_dir(&current).map_err(|e| AppError::Message(e.to_string()))?;

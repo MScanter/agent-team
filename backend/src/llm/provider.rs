@@ -31,6 +31,8 @@ pub struct Message {
 pub struct TokenUsage {
     pub input_tokens: u32,
     pub output_tokens: u32,
+    #[serde(default)]
+    pub estimated: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -68,4 +70,8 @@ pub trait LLMProvider: Send + Sync {
         let _ = tools;
         self.chat(messages, temperature, max_tokens).await
     }
+}
+
+pub fn estimate_tokens(text: &str) -> u32 {
+    (text.len() as f64 / 3.5).ceil() as u32
 }

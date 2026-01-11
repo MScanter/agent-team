@@ -35,4 +35,3 @@ pub struct ToolTrace {
     pub call: ToolCall,
     pub result: ToolResult,
 }
-

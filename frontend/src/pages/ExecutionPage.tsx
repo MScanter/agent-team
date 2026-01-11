@@ -175,6 +175,7 @@ export default function ExecutionPage() {
           wants_to_continue: true,
           input_tokens: 0,
           output_tokens: 0,
+          tokens_estimated: false,
           metadata: {},
           created_at: new Date().toISOString(),
         },

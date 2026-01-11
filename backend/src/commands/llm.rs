@@ -15,9 +15,14 @@ pub struct TestLLMResponse {
 }
 
 #[tauri::command]
-pub async fn test_llm(config: LLMRuntimeConfig, test_message: String) -> Result<TestLLMResponse, AppError> {
+pub async fn test_llm(
+    config: LLMRuntimeConfig,
+    test_message: String,
+) -> Result<TestLLMResponse, AppError> {
     let resolved_base_url = match &config.provider {
-        ProviderKind::OpenaiCompatible => Some(normalize_openai_compatible_base_url(config.base_url.clone())),
+        ProviderKind::OpenaiCompatible => Some(normalize_openai_compatible_base_url(
+            config.base_url.clone(),
+        )),
         _ => None,
     };
 
@@ -40,7 +45,10 @@ pub async fn test_llm(config: LLMRuntimeConfig, test_message: String) -> Result<
     Ok(TestLLMResponse {
         message: format!("Test successful for model {}", config.model_id),
         response_preview: preview,
-        tokens_used: resp.usage.input_tokens.saturating_add(resp.usage.output_tokens),
+        tokens_used: resp
+            .usage
+            .input_tokens
+            .saturating_add(resp.usage.output_tokens),
         resolved_base_url,
     })
 }

@@ -1,17 +1,20 @@
-#![cfg_attr(all(not(debug_assertions), target_os = "windows"), windows_subsystem = "windows")]
+#![cfg_attr(
+    all(not(debug_assertions), target_os = "windows"),
+    windows_subsystem = "windows"
+)]
 
+mod agents;
 mod commands;
 mod error;
-mod agents;
 mod llm;
 mod models;
 mod orchestration;
-mod store;
 mod state;
+mod store;
 mod tools;
 
-use tauri::Manager;
 use state::AppState;
+use tauri::Manager;
 
 fn main() {
     tauri::Builder::default()

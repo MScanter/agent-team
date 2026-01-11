@@ -34,6 +34,8 @@ pub struct Agent {
     pub model_id: Option<String>,
     pub temperature: f64,
     pub max_tokens: u32,
+    #[serde(default = "default_max_tool_iterations")]
+    pub max_tool_iterations: Option<u32>,
     #[serde(default)]
     pub tools: Vec<String>,
     pub knowledge_base_id: Option<String>,
@@ -87,6 +89,8 @@ pub struct AgentCreate {
     pub temperature: f64,
     #[serde(default = "default_max_tokens")]
     pub max_tokens: u32,
+    #[serde(default = "default_max_tool_iterations")]
+    pub max_tool_iterations: Option<u32>,
     #[serde(default)]
     pub tools: Vec<String>,
     #[serde(default)]
@@ -117,6 +121,7 @@ pub struct AgentUpdate {
     pub model_id: Option<String>,
     pub temperature: Option<f64>,
     pub max_tokens: Option<u32>,
+    pub max_tool_iterations: Option<u32>,
     pub tools: Option<Vec<String>>,
     pub knowledge_base_id: Option<String>,
     pub memory_enabled: Option<bool>,
@@ -139,6 +144,10 @@ fn default_max_tokens() -> u32 {
     2048
 }
 
+fn default_max_tool_iterations() -> Option<u32> {
+    Some(10)
+}
+
 fn default_speaking_priority() -> i32 {
     5
 }
@@ -146,4 +155,3 @@ fn default_speaking_priority() -> i32 {
 fn default_collaboration_style() -> String {
     "supportive".to_string()
 }
-

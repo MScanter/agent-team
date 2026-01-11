@@ -52,6 +52,7 @@ function MessageBubble({ message }: { message: ExecutionMessage }) {
   const isUser = message.sender_type === 'user'
   const isSystem = message.sender_type === 'system'
   const isTool = message.phase === 'tool_call' || message.phase === 'tool_result' || Boolean(message.sender_name?.startsWith('tool:'))
+  const totalTokens = (message.input_tokens || 0) + (message.output_tokens || 0)
 
   const toolMeta = (isTool ? (message.metadata as any) : null) as any
   const toolName =
@@ -81,15 +82,10 @@ function MessageBubble({ message }: { message: ExecutionMessage }) {
         {isUser ? <User className="w-6 h-6 text-white" /> : isTool ? <Wrench className="w-6 h-6 text-white" /> : <Bot className="w-6 h-6 text-white" />}
       </div>
 
-      <div className={`max-w-[85%] ${isUser ? 'text-right' : ''}`}>
+        <div className={`max-w-[85%] ${isUser ? 'text-right' : ''}`}>
         {message.sender_name && (
           <div className="text-[10px] font-press text-primary-400 mb-2 uppercase tracking-tighter">
             {isTool ? `${toolName}${toolAgent ? ` · ${toolAgent}` : ''}` : message.sender_name}
-            {message.confidence && (
-              <span className="ml-3 text-gray-500">
-                CONF: {Math.round(message.confidence * 100)}%
-              </span>
-            )}
             {isTool && (
               <span className="ml-3 text-gray-500">
                 {toolStatus}{toolDuration ? ` · ${toolDuration}` : ''}{toolError ? ` · ${toolError}` : ''}
@@ -123,6 +119,11 @@ function MessageBubble({ message }: { message: ExecutionMessage }) {
                 {message.phase === 'tool_result' && (
                   <div>
                     <div className="text-[10px] font-press text-gray-400 mb-2 uppercase tracking-tighter">OUTPUT</div>
+                    {toolName === 'read_file' && toolMeta?.ok === true && toolMeta?.output?.truncated === true && (
+                      <div className="mb-3 text-[10px] font-press text-yellow-300 bg-yellow-900/30 border-2 border-yellow-500 p-3 shadow-pixel-sm uppercase tracking-tighter leading-relaxed">
+                        文件过大，已截断。使用 offset 参数读取更多内容
+                      </div>
+                    )}
                     <pre className="whitespace-pre-wrap text-xs leading-relaxed bg-black/30 p-3 border-2 border-black overflow-x-auto">
                       {jsonPreview(toolMeta?.ok === false ? { error: toolMeta?.error } : toolMeta?.output)}
                     </pre>
@@ -136,6 +137,11 @@ function MessageBubble({ message }: { message: ExecutionMessage }) {
         </div>
         <div className="text-[10px] font-press text-gray-500 mt-3 uppercase tracking-tighter">
           ROUND {message.round} · {message.phase}
+          {totalTokens > 0 && !isTool && (
+            <span className={`ml-3 text-gray-500 ${message.tokens_estimated ? 'cursor-help' : ''}`} title={message.tokens_estimated ? '估算值' : undefined}>
+              TOKENS: {message.tokens_estimated ? `~${totalTokens}` : totalTokens}
+            </span>
+          )}
         </div>
       </div>
     </div>

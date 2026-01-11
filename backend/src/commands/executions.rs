@@ -8,7 +8,9 @@ use crate::agents::instance::AgentInstance;
 use crate::error::AppError;
 use crate::llm::factory::{provider_from_runtime_config, resolve_runtime_config_for_agent};
 use crate::models::common::{PaginatedResponse, SuccessResponse};
-use crate::models::execution::{ExecutionCreate, ExecutionListItem, ExecutionMessage, ExecutionRecord, ExecutionResponse};
+use crate::models::execution::{
+    ExecutionCreate, ExecutionListItem, ExecutionMessage, ExecutionRecord, ExecutionResponse,
+};
 use crate::models::team::Team;
 use crate::orchestration::debate::run_debate;
 use crate::orchestration::pipeline::run_pipeline;
@@ -47,7 +49,10 @@ pub fn list_executions(
         .collect();
 
     if let Some(team_id) = team_id {
-        executions = executions.into_iter().filter(|e| e.team_id == team_id).collect();
+        executions = executions
+            .into_iter()
+            .filter(|e| e.team_id == team_id)
+            .collect();
     }
     if let Some(status_filter) = status_filter {
         executions = executions
@@ -66,7 +71,11 @@ pub fn list_executions(
     };
     let start = (page - 1) * page_size;
     let end = (start + page_size).min(total);
-    let slice = if start >= total { &[] } else { &executions[start..end] };
+    let slice = if start >= total {
+        &[]
+    } else {
+        &executions[start..end]
+    };
 
     let items = slice
         .iter()
@@ -108,7 +117,10 @@ pub fn get_execution(state: State<AppState>, id: String) -> Result<ExecutionResp
 }
 
 #[tauri::command]
-pub fn create_execution(state: State<AppState>, execution: ExecutionCreate) -> Result<ExecutionResponse, AppError> {
+pub fn create_execution(
+    state: State<AppState>,
+    execution: ExecutionCreate,
+) -> Result<ExecutionResponse, AppError> {
     let now = Utc::now();
     let record = ExecutionRecord {
         id: Uuid::new_v4().to_string(),
@@ -172,12 +184,17 @@ pub fn control_execution(
         execution.status = "completed".to_string();
         execution.completed_at = Some(Utc::now());
     } else if action == "extend_budget" {
-        let add_tokens = params.get("tokens").and_then(|v| v.as_u64()).unwrap_or(50_000) as u32;
+        let add_tokens = params
+            .get("tokens")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(50_000) as u32;
         let add_cost = params.get("cost").and_then(|v| v.as_f64()).unwrap_or(5.0);
         execution.tokens_budget = execution.tokens_budget.saturating_add(add_tokens);
         execution.cost_budget += add_cost;
     } else {
-        return Err(AppError::Message("Invalid action or execution state".to_string()));
+        return Err(AppError::Message(
+            "Invalid action or execution state".to_string(),
+        ));
     }
 
     execution.updated_at = Utc::now();
@@ -206,12 +223,24 @@ pub fn set_execution_workspace(
 }
 
 #[tauri::command]
-pub fn start_execution(window: Window, state: State<AppState>, execution_id: String) -> Result<(), AppError> {
+pub fn start_execution(
+    window: Window,
+    state: State<AppState>,
+    execution_id: String,
+) -> Result<(), AppError> {
     let store = state.store.clone();
     let window = window.clone();
 
     tauri::async_runtime::spawn(async move {
-        if let Err(err) = run_execution(window.clone(), store.clone(), execution_id.clone(), None, None).await {
+        if let Err(err) = run_execution(
+            window.clone(),
+            store.clone(),
+            execution_id.clone(),
+            None,
+            None,
+        )
+        .await
+        {
             let message = err.to_string();
             if let Ok(Some(mut execution)) = store.executions_get(&execution_id) {
                 execution.status = "failed".to_string();
@@ -220,7 +249,14 @@ pub fn start_execution(window: Window, state: State<AppState>, execution_id: Str
                 let _ = store.executions_upsert(&execution);
             }
             let mut seq = 0;
-            emit_event(&window, &execution_id, "error", serde_json::json!({ "message": message }), None, &mut seq);
+            emit_event(
+                &window,
+                &execution_id,
+                "error",
+                serde_json::json!({ "message": message }),
+                None,
+                &mut seq,
+            );
         }
     });
 
@@ -239,8 +275,14 @@ pub fn followup_execution(
     let window = window.clone();
 
     tauri::async_runtime::spawn(async move {
-        if let Err(err) =
-            run_execution(window.clone(), store.clone(), execution_id.clone(), Some(input), target_agent_id).await
+        if let Err(err) = run_execution(
+            window.clone(),
+            store.clone(),
+            execution_id.clone(),
+            Some(input),
+            target_agent_id,
+        )
+        .await
         {
             let message = err.to_string();
             if let Ok(Some(mut execution)) = store.executions_get(&execution_id) {
@@ -250,7 +292,14 @@ pub fn followup_execution(
                 let _ = store.executions_upsert(&execution);
             }
             let mut seq = 0;
-            emit_event(&window, &execution_id, "error", serde_json::json!({ "message": message }), None, &mut seq);
+            emit_event(
+                &window,
+                &execution_id,
+                "error",
+                serde_json::json!({ "message": message }),
+                None,
+                &mut seq,
+            );
         }
     });
 
@@ -308,7 +357,15 @@ async fn run_execution(
             &mut event_seq,
         );
 
-        run_round(window, store, execution, input.clone(), target_agent_id, &mut event_seq).await?;
+        run_round(
+            window,
+            store,
+            execution,
+            input.clone(),
+            target_agent_id,
+            &mut event_seq,
+        )
+        .await?;
         return Ok(());
     }
 
@@ -379,7 +436,8 @@ async fn run_round(
         return Ok(());
     };
 
-    let mut state: OrchestrationState = serde_json::from_value(execution.shared_state.clone()).unwrap_or_default();
+    let mut state: OrchestrationState =
+        serde_json::from_value(execution.shared_state.clone()).unwrap_or_default();
     if state.topic.trim().is_empty() {
         state.topic = topic.clone();
     }
@@ -405,10 +463,10 @@ async fn run_round(
         content_type: "text".to_string(),
         responding_to: None,
         target_agent_id: None,
-        confidence: None,
         wants_to_continue: true,
         input_tokens: 0,
         output_tokens: 0,
+        tokens_estimated: false,
         metadata: serde_json::json!({}),
         created_at: now,
         updated_at: now,
@@ -430,76 +488,155 @@ async fn run_round(
     );
     msg_seq += 1;
 
-    let mut emit = |event_type: &str, mut data: Value, agent_id: Option<String>| -> Result<(), AppError> {
-        if event_type == "opinion" {
-            let agent_name = data.get("agent_name").and_then(|v| v.as_str()).unwrap_or("agent");
-            let content = data.get("content").and_then(|v| v.as_str()).unwrap_or("");
-            let round = data.get("round").and_then(|v| v.as_i64()).unwrap_or(round_num as i64) as i32;
-            let phase = data.get("phase").and_then(|v| v.as_str()).unwrap_or("opinion").to_string();
-            let now = Utc::now();
-            let message = ExecutionMessage {
-                id: Uuid::new_v4().to_string(),
-                sequence: msg_seq,
-                round,
-                phase: phase.clone(),
-                sender_type: if agent_id.is_some() { "agent".to_string() } else { "system".to_string() },
-                sender_id: agent_id.clone(),
-                sender_name: Some(agent_name.to_string()),
-                content: content.to_string(),
-                content_type: "text".to_string(),
-                responding_to: data.get("responding_to").and_then(|v| v.as_str()).map(|s| s.to_string()),
-                target_agent_id: data.get("target_agent_id").and_then(|v| v.as_str()).map(|s| s.to_string()),
-                confidence: data.get("confidence").and_then(|v| v.as_f64()),
-                wants_to_continue: data.get("wants_to_continue").and_then(|v| v.as_bool()).unwrap_or(true),
-                input_tokens: data.get("input_tokens").and_then(|v| v.as_i64()).unwrap_or(0) as i32,
-                output_tokens: data.get("output_tokens").and_then(|v| v.as_i64()).unwrap_or(0) as i32,
-                metadata: data.get("metadata").cloned().unwrap_or_else(|| serde_json::json!({})),
-                created_at: now,
-                updated_at: now,
-            };
-            store.execution_messages_upsert(&execution_id, &message)?;
-            if let Some(obj) = data.as_object_mut() {
-                obj.insert("message_id".to_string(), Value::String(message.id.clone()));
-                obj.insert("message_sequence".to_string(), serde_json::json!(message.sequence));
+    let mut emit =
+        |event_type: &str, mut data: Value, agent_id: Option<String>| -> Result<(), AppError> {
+            if event_type == "opinion" {
+                let agent_name = data
+                    .get("agent_name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("agent");
+                let content = data.get("content").and_then(|v| v.as_str()).unwrap_or("");
+                let round = data
+                    .get("round")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(round_num as i64) as i32;
+                let phase = data
+                    .get("phase")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("opinion")
+                    .to_string();
+                let now = Utc::now();
+                let input_tokens = data
+                    .get("input_tokens")
+                    .and_then(|v| v.as_u64())
+                    .or_else(|| {
+                        data.get("metadata")
+                            .and_then(|m| m.get("input_tokens"))
+                            .and_then(|v| v.as_u64())
+                    })
+                    .unwrap_or(0)
+                    .min(u64::from(u32::MAX)) as u32;
+                let output_tokens = data
+                    .get("output_tokens")
+                    .and_then(|v| v.as_u64())
+                    .or_else(|| {
+                        data.get("metadata")
+                            .and_then(|m| m.get("output_tokens"))
+                            .and_then(|v| v.as_u64())
+                    })
+                    .unwrap_or(0)
+                    .min(u64::from(u32::MAX)) as u32;
+                let tokens_estimated = data
+                    .get("tokens_estimated")
+                    .and_then(|v| v.as_bool())
+                    .or_else(|| {
+                        data.get("metadata")
+                            .and_then(|m| m.get("tokens_estimated"))
+                            .and_then(|v| v.as_bool())
+                    })
+                    .unwrap_or(false);
+                let message = ExecutionMessage {
+                    id: Uuid::new_v4().to_string(),
+                    sequence: msg_seq,
+                    round,
+                    phase: phase.clone(),
+                    sender_type: if agent_id.is_some() {
+                        "agent".to_string()
+                    } else {
+                        "system".to_string()
+                    },
+                    sender_id: agent_id.clone(),
+                    sender_name: Some(agent_name.to_string()),
+                    content: content.to_string(),
+                    content_type: "text".to_string(),
+                    responding_to: data
+                        .get("responding_to")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string()),
+                    target_agent_id: data
+                        .get("target_agent_id")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string()),
+                    wants_to_continue: data
+                        .get("wants_to_continue")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(true),
+                    input_tokens,
+                    output_tokens,
+                    tokens_estimated,
+                    metadata: data
+                        .get("metadata")
+                        .cloned()
+                        .unwrap_or_else(|| serde_json::json!({})),
+                    created_at: now,
+                    updated_at: now,
+                };
+                store.execution_messages_upsert(&execution_id, &message)?;
+                if let Some(obj) = data.as_object_mut() {
+                    obj.insert("message_id".to_string(), Value::String(message.id.clone()));
+                    obj.insert(
+                        "message_sequence".to_string(),
+                        serde_json::json!(message.sequence),
+                    );
+                }
+                msg_seq += 1;
+            } else if event_type == "tool_call" || event_type == "tool_result" {
+                let tool_name = data
+                    .get("tool_name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("tool");
+                let content = data.get("content").and_then(|v| v.as_str()).unwrap_or("");
+                let round = data
+                    .get("round")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(round_num as i64) as i32;
+                let phase = data
+                    .get("phase")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or(event_type)
+                    .to_string();
+                let now = Utc::now();
+                let message = ExecutionMessage {
+                    id: Uuid::new_v4().to_string(),
+                    sequence: msg_seq,
+                    round,
+                    phase: phase.clone(),
+                    sender_type: "system".to_string(),
+                    sender_id: agent_id.clone(),
+                    sender_name: Some(format!("tool:{tool_name}")),
+                    content: content.to_string(),
+                    content_type: "text".to_string(),
+                    responding_to: None,
+                    target_agent_id: None,
+                    wants_to_continue: true,
+                    input_tokens: 0,
+                    output_tokens: 0,
+                    tokens_estimated: false,
+                    metadata: data.clone(),
+                    created_at: now,
+                    updated_at: now,
+                };
+                store.execution_messages_upsert(&execution_id, &message)?;
+                if let Some(obj) = data.as_object_mut() {
+                    obj.insert("message_id".to_string(), Value::String(message.id.clone()));
+                    obj.insert(
+                        "message_sequence".to_string(),
+                        serde_json::json!(message.sequence),
+                    );
+                }
+                msg_seq += 1;
             }
-            msg_seq += 1;
-        } else if event_type == "tool_call" || event_type == "tool_result" {
-            let tool_name = data.get("tool_name").and_then(|v| v.as_str()).unwrap_or("tool");
-            let content = data.get("content").and_then(|v| v.as_str()).unwrap_or("");
-            let round = data.get("round").and_then(|v| v.as_i64()).unwrap_or(round_num as i64) as i32;
-            let phase = data.get("phase").and_then(|v| v.as_str()).unwrap_or(event_type).to_string();
-            let now = Utc::now();
-            let message = ExecutionMessage {
-                id: Uuid::new_v4().to_string(),
-                sequence: msg_seq,
-                round,
-                phase: phase.clone(),
-                sender_type: "system".to_string(),
-                sender_id: agent_id.clone(),
-                sender_name: Some(format!("tool:{tool_name}")),
-                content: content.to_string(),
-                content_type: "text".to_string(),
-                responding_to: None,
-                target_agent_id: None,
-                confidence: None,
-                wants_to_continue: true,
-                input_tokens: 0,
-                output_tokens: 0,
-                metadata: data.clone(),
-                created_at: now,
-                updated_at: now,
-            };
-            store.execution_messages_upsert(&execution_id, &message)?;
-            if let Some(obj) = data.as_object_mut() {
-                obj.insert("message_id".to_string(), Value::String(message.id.clone()));
-                obj.insert("message_sequence".to_string(), serde_json::json!(message.sequence));
-            }
-            msg_seq += 1;
-        }
 
-        emit_event(&window, &execution_id, event_type, data, agent_id, event_seq);
-        Ok(())
-    };
+            emit_event(
+                &window,
+                &execution_id,
+                event_type,
+                data,
+                agent_id,
+                event_seq,
+            );
+            Ok(())
+        };
 
     let mut tool_defs = Vec::new();
     let mut tool_executor: Option<ToolExecutor> = None;
@@ -532,13 +669,36 @@ async fn run_round(
     match team.collaboration_mode.as_str() {
         "pipeline" => {
             state.phase = crate::orchestration::state::OrchestrationPhase::Sequential;
-            let _ = run_pipeline(agents, &mut state, &mut emit, tool_defs.as_slice(), tool_executor.clone()).await?;
+            let _ = run_pipeline(
+                agents,
+                &mut state,
+                &mut emit,
+                tool_defs.as_slice(),
+                tool_executor.clone(),
+            )
+            .await?;
         }
         "debate" => {
-            let _ = run_debate(agents, &mut state, &mut emit, 3, tool_defs.as_slice(), tool_executor.clone()).await?;
+            let _ = run_debate(
+                agents,
+                &mut state,
+                &mut emit,
+                3,
+                tool_defs.as_slice(),
+                tool_executor.clone(),
+            )
+            .await?;
         }
         _ => {
-            let _ = run_roundtable(agents, &mut state, &mut emit, true, tool_defs.as_slice(), tool_executor.clone()).await?;
+            let _ = run_roundtable(
+                agents,
+                &mut state,
+                &mut emit,
+                true,
+                tool_defs.as_slice(),
+                tool_executor.clone(),
+            )
+            .await?;
         }
     }
 

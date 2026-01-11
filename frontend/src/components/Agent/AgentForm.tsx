@@ -21,6 +21,7 @@ export default function AgentForm({ agent, onClose }: Props) {
     model_id: agent?.model_id,
     temperature: agent?.temperature ?? 0.7,
     max_tokens: agent?.max_tokens ?? 2000,
+    max_tool_iterations: agent?.max_tool_iterations ?? 10,
     collaboration_style: agent?.collaboration_style || 'supportive',
     tags: agent?.tags || [],
   })
@@ -135,6 +136,22 @@ export default function AgentForm({ agent, onClose }: Props) {
                 value={form.max_tokens}
                 onChange={(e) => setForm({ ...form, max_tokens: parseInt(e.target.value) })}
               />
+            </div>
+            <div className="bg-black/20 p-4 border-2 border-black">
+              <label className="label uppercase tracking-tighter">最大工具调用轮次</label>
+              <input
+                type="number"
+                min={1}
+                max={50}
+                className="input w-full"
+                value={form.max_tool_iterations ?? 10}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    max_tool_iterations: Math.min(50, Math.max(1, parseInt(e.target.value || '10'))),
+                  })}
+              />
+              <p className="text-[10px] text-gray-400 mt-2 uppercase tracking-tight">仅在开启工具调用时生效（1-50，默认 10）</p>
             </div>
           </div>
 

@@ -45,52 +45,99 @@ pub async fn run_debate(
     let mut pro_args = Vec::new();
     for agent in pro.iter_mut() {
         let (resp, traces) = agent
-            .generate_opinion_with_tools(&pro_prompt, "", &[], "initial", tool_defs, tool_executor.as_ref())
+            .generate_opinion_with_tools(
+                &pro_prompt,
+                "",
+                &[],
+                "initial",
+                tool_defs,
+                tool_executor.as_ref(),
+            )
             .await?;
         emit_tool_traces(emit, &traces, &agent.id, &agent.name, state.round)?;
 
-        let input_tokens = resp.metadata.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
-        let output_tokens = resp.metadata.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+        let input_tokens = resp
+            .metadata
+            .get("input_tokens")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0) as u32;
+        let output_tokens = resp
+            .metadata
+            .get("output_tokens")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0) as u32;
+        let tokens_estimated = resp
+            .metadata
+            .get("tokens_estimated")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         state.add_opinion(Opinion {
             agent_id: agent.id.clone(),
             agent_name: agent.name.clone(),
             content: resp.content.clone(),
             round: state.round,
             phase: "pro_opening".to_string(),
-            confidence: resp.confidence,
             wants_to_continue: true,
             responding_to: None,
             input_tokens,
             output_tokens,
         });
-        pro_args.push(serde_json::json!({"agent_name": agent.name.clone(), "content": resp.content.clone()}));
+        pro_args.push(
+            serde_json::json!({"agent_name": agent.name.clone(), "content": resp.content.clone()}),
+        );
         emit(
             "opinion",
             serde_json::json!({
                 "agent_name": agent.name.clone(),
                 "content": resp.content.clone(),
                 "round": state.round,
-                "phase": "pro_opening"
+                "phase": "pro_opening",
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "tokens_estimated": tokens_estimated,
+                "metadata": resp.metadata
             }),
             Some(agent.id.clone()),
         )?;
     }
 
-    let con_prompt = format!("论题：{}\n\n你是反方，请回应正方并给出开场陈述。", state.topic);
+    let con_prompt = format!(
+        "论题：{}\n\n你是反方，请回应正方并给出开场陈述。",
+        state.topic
+    );
     for agent in con.iter_mut() {
         let (resp, traces) = agent
-            .generate_opinion_with_tools(&con_prompt, "", &pro_args, "response", tool_defs, tool_executor.as_ref())
+            .generate_opinion_with_tools(
+                &con_prompt,
+                "",
+                &pro_args,
+                "response",
+                tool_defs,
+                tool_executor.as_ref(),
+            )
             .await?;
         emit_tool_traces(emit, &traces, &agent.id, &agent.name, state.round)?;
-        let input_tokens = resp.metadata.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
-        let output_tokens = resp.metadata.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+        let input_tokens = resp
+            .metadata
+            .get("input_tokens")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0) as u32;
+        let output_tokens = resp
+            .metadata
+            .get("output_tokens")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0) as u32;
+        let tokens_estimated = resp
+            .metadata
+            .get("tokens_estimated")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         state.add_opinion(Opinion {
             agent_id: agent.id.clone(),
             agent_name: agent.name.clone(),
             content: resp.content.clone(),
             round: state.round,
             phase: "con_opening".to_string(),
-            confidence: resp.confidence,
             wants_to_continue: true,
             responding_to: None,
             input_tokens,
@@ -102,7 +149,11 @@ pub async fn run_debate(
                 "agent_name": agent.name.clone(),
                 "content": resp.content.clone(),
                 "round": state.round,
-                "phase": "con_opening"
+                "phase": "con_opening",
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "tokens_estimated": tokens_estimated,
+                "metadata": resp.metadata
             }),
             Some(agent.id.clone()),
         )?;
@@ -126,20 +177,41 @@ pub async fn run_debate(
 
         for agent in pro.iter_mut() {
             let (resp, traces) = agent
-                .generate_opinion_with_tools(&state.topic, "", &last, "response", tool_defs, tool_executor.as_ref())
+                .generate_opinion_with_tools(
+                    &state.topic,
+                    "",
+                    &last,
+                    "response",
+                    tool_defs,
+                    tool_executor.as_ref(),
+                )
                 .await?;
             emit_tool_traces(emit, &traces, &agent.id, &agent.name, state.round)?;
+            let input_tokens = resp
+                .metadata
+                .get("input_tokens")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0) as u32;
+            let output_tokens = resp
+                .metadata
+                .get("output_tokens")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0) as u32;
+            let tokens_estimated = resp
+                .metadata
+                .get("tokens_estimated")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
             state.add_opinion(Opinion {
                 agent_id: agent.id.clone(),
                 agent_name: agent.name.clone(),
                 content: resp.content.clone(),
                 round: state.round,
                 phase: "pro_rebuttal".to_string(),
-                confidence: resp.confidence,
                 wants_to_continue: true,
                 responding_to: None,
-                input_tokens: resp.metadata.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
-                output_tokens: resp.metadata.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
+                input_tokens,
+                output_tokens,
             });
             emit(
                 "opinion",
@@ -147,7 +219,11 @@ pub async fn run_debate(
                     "agent_name": agent.name.clone(),
                     "content": resp.content.clone(),
                     "round": state.round,
-                    "phase": "pro_rebuttal"
+                    "phase": "pro_rebuttal",
+                    "input_tokens": input_tokens,
+                    "output_tokens": output_tokens,
+                    "tokens_estimated": tokens_estimated,
+                    "metadata": resp.metadata
                 }),
                 Some(agent.id.clone()),
             )?;
@@ -155,20 +231,41 @@ pub async fn run_debate(
 
         for agent in con.iter_mut() {
             let (resp, traces) = agent
-                .generate_opinion_with_tools(&state.topic, "", &last, "response", tool_defs, tool_executor.as_ref())
+                .generate_opinion_with_tools(
+                    &state.topic,
+                    "",
+                    &last,
+                    "response",
+                    tool_defs,
+                    tool_executor.as_ref(),
+                )
                 .await?;
             emit_tool_traces(emit, &traces, &agent.id, &agent.name, state.round)?;
+            let input_tokens = resp
+                .metadata
+                .get("input_tokens")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0) as u32;
+            let output_tokens = resp
+                .metadata
+                .get("output_tokens")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0) as u32;
+            let tokens_estimated = resp
+                .metadata
+                .get("tokens_estimated")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
             state.add_opinion(Opinion {
                 agent_id: agent.id.clone(),
                 agent_name: agent.name.clone(),
                 content: resp.content.clone(),
                 round: state.round,
                 phase: "con_rebuttal".to_string(),
-                confidence: resp.confidence,
                 wants_to_continue: true,
                 responding_to: None,
-                input_tokens: resp.metadata.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
-                output_tokens: resp.metadata.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
+                input_tokens,
+                output_tokens,
             });
             emit(
                 "opinion",
@@ -176,7 +273,11 @@ pub async fn run_debate(
                     "agent_name": agent.name.clone(),
                     "content": resp.content.clone(),
                     "round": state.round,
-                    "phase": "con_rebuttal"
+                    "phase": "con_rebuttal",
+                    "input_tokens": input_tokens,
+                    "output_tokens": output_tokens,
+                    "tokens_estimated": tokens_estimated,
+                    "metadata": resp.metadata
                 }),
                 Some(agent.id.clone()),
             )?;
@@ -206,22 +307,43 @@ pub async fn run_debate(
 
     let mut judge = judge;
     let (verdict, traces) = judge
-        .generate_opinion_with_tools(&verdict_prompt, "", &[], "initial", tool_defs, tool_executor.as_ref())
+        .generate_opinion_with_tools(
+            &verdict_prompt,
+            "",
+            &[],
+            "initial",
+            tool_defs,
+            tool_executor.as_ref(),
+        )
         .await?;
     emit_tool_traces(emit, &traces, &judge.id, &judge.name, state.round)?;
 
     state.summary = verdict.content.clone();
+    let input_tokens = verdict
+        .metadata
+        .get("input_tokens")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0) as u32;
+    let output_tokens = verdict
+        .metadata
+        .get("output_tokens")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0) as u32;
+    let tokens_estimated = verdict
+        .metadata
+        .get("tokens_estimated")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
     state.add_opinion(Opinion {
         agent_id: judge.id.clone(),
         agent_name: judge.name.clone(),
         content: verdict.content.clone(),
         round: state.round,
         phase: "judge_verdict".to_string(),
-        confidence: verdict.confidence,
         wants_to_continue: false,
         responding_to: None,
-        input_tokens: verdict.metadata.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
-        output_tokens: verdict.metadata.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
+        input_tokens,
+        output_tokens,
     });
     emit(
         "opinion",
@@ -229,7 +351,11 @@ pub async fn run_debate(
             "agent_name": judge.name.clone(),
             "content": verdict.content.clone(),
             "round": state.round,
-            "phase": "judge_verdict"
+            "phase": "judge_verdict",
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "tokens_estimated": tokens_estimated,
+            "metadata": verdict.metadata
         }),
         Some(judge.id.clone()),
     )?;

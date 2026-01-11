@@ -27,7 +27,9 @@ fn walk_files(root: &Path, start_rel: &Path, max_files: usize) -> Result<Vec<Pat
     let root = security::canonicalize_root(root)?;
     let start = security::resolve_existing_path(&root, start_rel)?;
     if !start.is_dir() {
-        return Err(AppError::Message("Search path is not a directory".to_string()));
+        return Err(AppError::Message(
+            "Search path is not a directory".to_string(),
+        ));
     }
 
     let mut out = Vec::new();
@@ -42,7 +44,8 @@ fn walk_files(root: &Path, start_rel: &Path, max_files: usize) -> Result<Vec<Pat
             }
             let entry = entry.map_err(|e| AppError::Message(e.to_string()))?;
             let path = entry.path();
-            let meta = std::fs::symlink_metadata(&path).map_err(|e| AppError::Message(e.to_string()))?;
+            let meta =
+                std::fs::symlink_metadata(&path).map_err(|e| AppError::Message(e.to_string()))?;
             if meta.file_type().is_symlink() {
                 continue;
             }
@@ -128,7 +131,8 @@ pub fn search_content(
             continue;
         }
 
-        let (text, _truncated) = files::read_file(&root, &rel, max_read_bytes)?;
+        let (text, _total_size, _truncated) =
+            files::read_file(&root, &rel, None, None, max_read_bytes)?;
         for (idx, line) in text.lines().enumerate() {
             if out.len() >= max_matches {
                 break;
@@ -146,7 +150,13 @@ pub fn search_content(
     Ok(out)
 }
 
-pub fn search_files(root: &Path, pattern: &str, path: Option<&str>, max_matches: usize, max_files: usize) -> Result<Vec<String>, AppError> {
+pub fn search_files(
+    root: &Path,
+    pattern: &str,
+    path: Option<&str>,
+    max_matches: usize,
+    max_files: usize,
+) -> Result<Vec<String>, AppError> {
     let root = security::canonicalize_root(root)?;
     let rel_dir = path
         .map(|s| s.trim())
@@ -167,7 +177,11 @@ pub fn search_files(root: &Path, pattern: &str, path: Option<&str>, max_matches:
         if !rx.is_match(file_name) {
             continue;
         }
-        let rel = f.strip_prefix(&root).unwrap_or(&f).to_string_lossy().replace('\\', "/");
+        let rel = f
+            .strip_prefix(&root)
+            .unwrap_or(&f)
+            .to_string_lossy()
+            .replace('\\', "/");
         out.push(rel);
     }
     Ok(out)
@@ -178,25 +192,41 @@ pub fn get_file_info(root: &Path, path: &str) -> Result<FileInfo, AppError> {
     let rel = security::validate_relative_path(path)?;
     let full = security::resolve_existing_path(&root, &rel)?;
     let meta = std::fs::metadata(&full).map_err(|e| AppError::Message(e.to_string()))?;
-    let modified_unix_ms = meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_millis() as u64);
+    let modified_unix_ms = meta
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_millis() as u64);
 
     Ok(FileInfo {
         path: path.to_string(),
         is_dir: meta.is_dir(),
-        size: if meta.is_file() { Some(meta.len()) } else { None },
+        size: if meta.is_file() {
+            Some(meta.len())
+        } else {
+            None
+        },
         modified_unix_ms,
     })
 }
 
 pub fn count_lines(root: &Path, path: &str, max_read_bytes: u64) -> Result<u64, AppError> {
-    let (text, _truncated) = files::read_file(root, path, max_read_bytes)?;
+    let (text, _total_size, _truncated) = files::read_file(root, path, None, None, max_read_bytes)?;
     Ok(text.lines().count() as u64)
 }
 
-pub fn diff_files(root: &Path, path1: &str, path2: &str, max_read_bytes: u64) -> Result<String, AppError> {
-    let (a, a_trunc) = files::read_file(root, path1, max_read_bytes)?;
-    let (b, b_trunc) = files::read_file(root, path2, max_read_bytes)?;
-    let diff = similar::TextDiff::from_lines(&a, &b).unified_diff().header(path1, path2).to_string();
+pub fn diff_files(
+    root: &Path,
+    path1: &str,
+    path2: &str,
+    max_read_bytes: u64,
+) -> Result<String, AppError> {
+    let (a, _a_total_size, a_trunc) = files::read_file(root, path1, None, None, max_read_bytes)?;
+    let (b, _b_total_size, b_trunc) = files::read_file(root, path2, None, None, max_read_bytes)?;
+    let diff = similar::TextDiff::from_lines(&a, &b)
+        .unified_diff()
+        .header(path1, path2)
+        .to_string();
     if a_trunc || b_trunc {
         return Ok(format!("{diff}\n\n[diff truncated due to file size limit]"));
     }

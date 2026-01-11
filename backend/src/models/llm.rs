@@ -46,4 +46,3 @@ fn default_max_context_length() -> u32 {
 fn default_supports_tools() -> bool {
     true
 }
-

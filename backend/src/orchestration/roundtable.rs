@@ -40,7 +40,14 @@ pub async fn run_roundtable(
         tasks.push(async move {
             let mut agent = agent;
             let res = agent
-                .generate_opinion_with_tools(&topic, &summary, &recent, "initial", tool_defs, tool_executor.as_ref())
+                .generate_opinion_with_tools(
+                    &topic,
+                    &summary,
+                    &recent,
+                    "initial",
+                    tool_defs,
+                    tool_executor.as_ref(),
+                )
                 .await;
             (agent, res)
         });
@@ -54,15 +61,27 @@ pub async fn run_roundtable(
                 let agent_id = agent.id.clone();
                 let agent_name = agent.name.clone();
                 emit_tool_traces(emit, &traces, &agent_id, &agent_name, state.round)?;
-                let input_tokens = resp.metadata.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
-                let output_tokens = resp.metadata.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+                let input_tokens = resp
+                    .metadata
+                    .get("input_tokens")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0) as u32;
+                let output_tokens = resp
+                    .metadata
+                    .get("output_tokens")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0) as u32;
+                let tokens_estimated = resp
+                    .metadata
+                    .get("tokens_estimated")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
                 let opinion = Opinion {
                     agent_id: agent_id.clone(),
                     agent_name: agent_name.clone(),
                     content: resp.content.clone(),
                     round: state.round,
                     phase: "initial".to_string(),
-                    confidence: resp.confidence,
                     wants_to_continue: resp.wants_to_continue,
                     responding_to: resp.responding_to.clone(),
                     input_tokens,
@@ -76,12 +95,12 @@ pub async fn run_roundtable(
                     serde_json::json!({
                         "agent_name": agent_name,
                         "content": resp.content,
-                        "confidence": resp.confidence,
                         "wants_to_continue": resp.wants_to_continue,
                         "round": state.round,
                         "phase": "initial",
                         "input_tokens": input_tokens,
                         "output_tokens": output_tokens,
+                        "tokens_estimated": tokens_estimated,
                         "metadata": resp.metadata
                     }),
                     Some(agent_id),
@@ -132,7 +151,14 @@ pub async fn run_roundtable(
         tasks.push(async move {
             let mut agent = agent;
             let res = agent
-                .generate_opinion_with_tools(&topic, &summary, &context, "response", tool_defs, tool_executor.as_ref())
+                .generate_opinion_with_tools(
+                    &topic,
+                    &summary,
+                    &context,
+                    "response",
+                    tool_defs,
+                    tool_executor.as_ref(),
+                )
                 .await;
             (agent, res)
         });
@@ -145,15 +171,27 @@ pub async fn run_roundtable(
                 let agent_id = agent.id.clone();
                 let agent_name = agent.name.clone();
                 emit_tool_traces(emit, &traces, &agent_id, &agent_name, state.round)?;
-                let input_tokens = resp.metadata.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
-                let output_tokens = resp.metadata.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+                let input_tokens = resp
+                    .metadata
+                    .get("input_tokens")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0) as u32;
+                let output_tokens = resp
+                    .metadata
+                    .get("output_tokens")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0) as u32;
+                let tokens_estimated = resp
+                    .metadata
+                    .get("tokens_estimated")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
                 let opinion = Opinion {
                     agent_id: agent_id.clone(),
                     agent_name: agent_name.clone(),
                     content: resp.content.clone(),
                     round: state.round,
                     phase: "response".to_string(),
-                    confidence: resp.confidence,
                     wants_to_continue: resp.wants_to_continue,
                     responding_to: resp.responding_to.clone(),
                     input_tokens,
@@ -166,12 +204,12 @@ pub async fn run_roundtable(
                     serde_json::json!({
                         "agent_name": agent_name,
                         "content": resp.content,
-                        "confidence": resp.confidence,
                         "wants_to_continue": resp.wants_to_continue,
                         "round": state.round,
                         "phase": "response",
                         "input_tokens": input_tokens,
                         "output_tokens": output_tokens,
+                        "tokens_estimated": tokens_estimated,
                         "metadata": resp.metadata
                     }),
                     Some(agent_id),

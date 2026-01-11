@@ -13,6 +13,8 @@ pub struct AppState {
 impl AppState {
     pub fn init(_app: &AppHandle) -> Result<Self, AppError> {
         let store = SqliteStore::new("agent-team")?;
-        Ok(Self { store: Arc::new(store) })
+        Ok(Self {
+            store: Arc::new(store),
+        })
     }
 }

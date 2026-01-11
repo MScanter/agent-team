@@ -14,6 +14,7 @@ export interface Agent {
   model_id?: string
   temperature: number
   max_tokens: number
+  max_tool_iterations?: number
   tools: string[]
   knowledge_base_id?: string
   memory_enabled: boolean
@@ -63,6 +64,7 @@ export interface AgentCreate {
   model_id?: string
   temperature?: number
   max_tokens?: number
+  max_tool_iterations?: number
   tools?: string[]
   knowledge_base_id?: string
   memory_enabled?: boolean
@@ -195,7 +197,6 @@ export interface AgentState {
   status: string
   wants_to_continue: boolean
   last_opinion?: string
-  confidence?: number
 }
 
 export interface ExecutionMessage {
@@ -210,10 +211,10 @@ export interface ExecutionMessage {
   content_type: 'text' | 'json' | 'markdown'
   responding_to?: string
   target_agent_id?: string
-  confidence?: number
   wants_to_continue: boolean
   input_tokens: number
   output_tokens: number
+  tokens_estimated: boolean
   metadata: Record<string, unknown>
   created_at: string
 }

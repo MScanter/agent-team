@@ -24,4 +24,3 @@ fn default_success() -> bool {
 fn default_success_message() -> String {
     "Operation completed successfully".to_string()
 }
-
