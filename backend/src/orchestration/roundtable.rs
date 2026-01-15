@@ -1,5 +1,3 @@
-use futures::{stream::FuturesUnordered, StreamExt};
-
 use crate::agents::instance::AgentInstance;
 use crate::error::AppError;
 use crate::orchestration::state::{Opinion, OrchestrationPhase, OrchestrationState};
@@ -16,46 +14,26 @@ pub async fn run_roundtable(
     tool_executor: Option<ToolExecutor>,
 ) -> Result<Vec<AgentInstance>, AppError> {
     state.phase = OrchestrationPhase::Parallel;
-    emit(
-        "status",
-        serde_json::json!({
-            "message": format!("第 {} 轮：并行发言", state.round),
-            "round": state.round,
-            "phase": "parallel"
-        }),
-        None,
-    )?;
 
     let recent = state.recent_opinions_json(6);
     let topic = state.topic.clone();
     let summary = state.summary.clone();
 
-    let mut tasks = FuturesUnordered::new();
-    for agent in agents.into_iter() {
-        let topic = topic.clone();
-        let summary = summary.clone();
-        let recent = recent.clone();
-        let tool_executor = tool_executor.clone();
-        let tool_defs = tool_defs;
-        tasks.push(async move {
-            let mut agent = agent;
-            let res = agent
-                .generate_opinion_with_tools(
-                    &topic,
-                    &summary,
-                    &recent,
-                    "initial",
-                    tool_defs,
-                    tool_executor.as_ref(),
-                )
-                .await;
-            (agent, res)
-        });
-    }
-
-    let mut completed_agents = Vec::new();
     let mut round_one = Vec::new();
-    while let Some((agent, result)) = tasks.next().await {
+
+    // 顺序执行：逐个 agent 发言
+    for agent in agents.iter_mut() {
+        let result = agent
+            .generate_opinion_with_tools(
+                &topic,
+                &summary,
+                &recent,
+                "initial",
+                tool_defs,
+                tool_executor.as_ref(),
+            )
+            .await;
+
         match result {
             Ok((resp, traces)) => {
                 let agent_id = agent.id.clone();
@@ -119,53 +97,45 @@ pub async fn run_roundtable(
                 )?;
             }
         }
-        completed_agents.push(agent);
     }
 
-    agents = completed_agents;
-    if !enable_response_phase {
+    // 检查是否所有 Agent 都认为讨论已完成
+    let all_done = state
+        .agent_wants_continue
+        .values()
+        .all(|&wants| !wants);
+
+    if !enable_response_phase || all_done {
+        if all_done {
+            emit(
+                "status",
+                serde_json::json!({
+                    "message": "所有专家认为讨论已充分完成",
+                    "phase": "auto_complete",
+                    "round": state.round
+                }),
+                None,
+            )?;
+        }
         state.phase = OrchestrationPhase::Completed;
         return Ok(agents);
     }
 
     state.phase = OrchestrationPhase::Responding;
-    emit(
-        "status",
-        serde_json::json!({
-            "message": format!("第 {} 轮：互相回应", state.round),
-            "round": state.round,
-            "phase": "response"
-        }),
-        None,
-    )?;
 
-    let topic = state.topic.clone();
-    let summary = state.summary.clone();
-    let mut tasks = FuturesUnordered::new();
-    for agent in agents.into_iter() {
-        let topic = topic.clone();
-        let summary = summary.clone();
-        let context = round_one.clone();
-        let tool_executor = tool_executor.clone();
-        let tool_defs = tool_defs;
-        tasks.push(async move {
-            let mut agent = agent;
-            let res = agent
-                .generate_opinion_with_tools(
-                    &topic,
-                    &summary,
-                    &context,
-                    "response",
-                    tool_defs,
-                    tool_executor.as_ref(),
-                )
-                .await;
-            (agent, res)
-        });
-    }
+    // 顺序执行：逐个 agent 回应
+    for agent in agents.iter_mut() {
+        let result = agent
+            .generate_opinion_with_tools(
+                &topic,
+                &summary,
+                &round_one,
+                "response",
+                tool_defs,
+                tool_executor.as_ref(),
+            )
+            .await;
 
-    let mut completed_agents = Vec::new();
-    while let Some((agent, result)) = tasks.next().await {
         match result {
             Ok((resp, traces)) => {
                 let agent_id = agent.id.clone();
@@ -228,9 +198,8 @@ pub async fn run_roundtable(
                 )?;
             }
         }
-        completed_agents.push(agent);
     }
 
     state.phase = OrchestrationPhase::Completed;
-    Ok(completed_agents)
+    Ok(agents)
 }

@@ -114,11 +114,22 @@ impl AgentInstance {
         topic: &str,
         discussion_summary: &str,
         recent_opinions: &[serde_json::Value],
-        phase: &str,
+        _phase: &str,
         tools: &[ToolDefinition],
         executor: Option<&ToolExecutor>,
     ) -> Result<(AgentResponse, Vec<ToolTrace>), crate::error::AppError> {
         let mut messages = vec![self.system_message()];
+
+        // 添加协作机制提示（[DONE] 标记）
+        messages.push(Message {
+            role: MessageRole::System,
+            content: Some(
+                "协作提示：如果你认为当前讨论已经充分完成，请在回复末尾另起一行写上 [DONE]".to_string(),
+            ),
+            name: None,
+            tool_call_id: None,
+            tool_calls: None,
+        });
 
         let context = self.build_context_message(discussion_summary, recent_opinions, topic);
         messages.push(Message {
@@ -129,27 +140,14 @@ impl AgentInstance {
             tool_calls: None,
         });
 
-        let instruction = if phase == "initial" {
-            "请就上述主题发表你的专业观点。\n\n要求：\n1. 从你的专业角度分析\n2. 给出具体、有见地的观点\n3. 如果有其他专家的观点，可以参考但要保持独立思考\n\n请直接输出你的观点，不要加前缀。"
-        } else {
-            "请根据其他专家的观点进行回应。\n\n你可以：\n1. 补充自己的观点\n2. 对某位专家的观点提出质疑或不同看法\n3. 表示同意某个观点并说明原因\n4. 如果没有新的内容要补充，可以简短表示\n\n请直接输出你的回应，不要加前缀。"
-        };
-        messages.push(Message {
-            role: MessageRole::User,
-            content: Some(instruction.to_string()),
-            name: None,
-            tool_call_id: None,
-            tool_calls: None,
-        });
-
         let tools_enabled = executor.is_some() && !tools.is_empty();
         if tools_enabled {
             messages.insert(
-                1,
+                2,
                 Message {
                     role: MessageRole::System,
                     content: Some(
-                        "你可以在需要时调用工具来读取/搜索/修改工作目录下的文件。仅在确有必要时调用工具，并在最终回答中引用工具返回的结果。".to_string(),
+                        "你可以在需要时调用工具来读取/搜索/修改工作目录下的文件。".to_string(),
                     ),
                     name: None,
                     tool_call_id: None,
@@ -247,21 +245,8 @@ impl AgentInstance {
 }
 
 fn should_continue(content: &str) -> bool {
-    let completion_phrases = [
-        "没有补充",
-        "没有更多",
-        "我同意",
-        "我赞同",
-        "没有异议",
-        "就这些",
-    ];
-    let lowered = content.to_lowercase();
-    for p in completion_phrases {
-        if lowered.contains(p) {
-            return false;
-        }
-    }
-    true
+    // 检测 [DONE] 标记
+    !content.contains("[DONE]")
 }
 
 fn default_true() -> bool {
