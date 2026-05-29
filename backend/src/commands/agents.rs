@@ -23,23 +23,17 @@ pub fn list_agents(
     let page_size = page_size.unwrap_or(20).clamp(1, 100);
 
     let mut agents = state.store.agents_list()?;
-    agents = agents
-        .into_iter()
-        .filter(|a| a.user_id == LOCAL_USER_ID || a.is_public)
-        .collect();
+    agents.retain(|a| a.user_id == LOCAL_USER_ID || a.is_public);
 
     if let Some(search) = search {
         let needle = search.to_lowercase();
-        agents = agents
-            .into_iter()
-            .filter(|a| {
-                a.name.to_lowercase().contains(&needle)
-                    || a.description
-                        .as_ref()
-                        .map(|d| d.to_lowercase().contains(&needle))
-                        .unwrap_or(false)
-            })
-            .collect();
+        agents.retain(|a| {
+            a.name.to_lowercase().contains(&needle)
+                || a.description
+                    .as_ref()
+                    .map(|d| d.to_lowercase().contains(&needle))
+                    .unwrap_or(false)
+        });
     }
 
     if let Some(tags) = tags {
@@ -50,25 +44,16 @@ pub fn list_agents(
             .map(|s| s.to_string())
             .collect();
         if !tag_set.is_empty() {
-            agents = agents
-                .into_iter()
-                .filter(|a| tag_set.iter().any(|t| a.tags.contains(t)))
-                .collect();
+            agents.retain(|a| tag_set.iter().any(|t| a.tags.contains(t)));
         }
     }
 
     if let Some(is_template) = is_template {
-        agents = agents
-            .into_iter()
-            .filter(|a| a.is_template == is_template)
-            .collect();
+        agents.retain(|a| a.is_template == is_template);
     }
 
     if let Some(style) = collaboration_style {
-        agents = agents
-            .into_iter()
-            .filter(|a| a.collaboration_style == style)
-            .collect();
+        agents.retain(|a| a.collaboration_style == style);
     }
 
     agents.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
@@ -77,7 +62,7 @@ pub fn list_agents(
     let total_pages = if total == 0 {
         0
     } else {
-        (total + page_size - 1) / page_size
+        total.div_ceil(page_size)
     };
 
     let start = (page - 1) * page_size;

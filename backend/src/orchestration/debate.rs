@@ -56,21 +56,7 @@ pub async fn run_debate(
             .await?;
         emit_tool_traces(emit, &traces, &agent.id, &agent.name, state.round)?;
 
-        let input_tokens = resp
-            .metadata
-            .get("input_tokens")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0) as u32;
-        let output_tokens = resp
-            .metadata
-            .get("output_tokens")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0) as u32;
-        let tokens_estimated = resp
-            .metadata
-            .get("tokens_estimated")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
+        let (input_tokens, output_tokens, tokens_estimated) = resp.token_counts();
         state.add_opinion(Opinion {
             agent_id: agent.id.clone(),
             agent_name: agent.name.clone(),
@@ -117,21 +103,7 @@ pub async fn run_debate(
             )
             .await?;
         emit_tool_traces(emit, &traces, &agent.id, &agent.name, state.round)?;
-        let input_tokens = resp
-            .metadata
-            .get("input_tokens")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0) as u32;
-        let output_tokens = resp
-            .metadata
-            .get("output_tokens")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0) as u32;
-        let tokens_estimated = resp
-            .metadata
-            .get("tokens_estimated")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
+        let (input_tokens, output_tokens, tokens_estimated) = resp.token_counts();
         state.add_opinion(Opinion {
             agent_id: agent.id.clone(),
             agent_name: agent.name.clone(),
@@ -187,21 +159,7 @@ pub async fn run_debate(
                 )
                 .await?;
             emit_tool_traces(emit, &traces, &agent.id, &agent.name, state.round)?;
-            let input_tokens = resp
-                .metadata
-                .get("input_tokens")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0) as u32;
-            let output_tokens = resp
-                .metadata
-                .get("output_tokens")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0) as u32;
-            let tokens_estimated = resp
-                .metadata
-                .get("tokens_estimated")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false);
+            let (input_tokens, output_tokens, tokens_estimated) = resp.token_counts();
             state.add_opinion(Opinion {
                 agent_id: agent.id.clone(),
                 agent_name: agent.name.clone(),
@@ -241,21 +199,7 @@ pub async fn run_debate(
                 )
                 .await?;
             emit_tool_traces(emit, &traces, &agent.id, &agent.name, state.round)?;
-            let input_tokens = resp
-                .metadata
-                .get("input_tokens")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0) as u32;
-            let output_tokens = resp
-                .metadata
-                .get("output_tokens")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0) as u32;
-            let tokens_estimated = resp
-                .metadata
-                .get("tokens_estimated")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false);
+            let (input_tokens, output_tokens, tokens_estimated) = resp.token_counts();
             state.add_opinion(Opinion {
                 agent_id: agent.id.clone(),
                 agent_name: agent.name.clone(),
@@ -319,21 +263,7 @@ pub async fn run_debate(
     emit_tool_traces(emit, &traces, &judge.id, &judge.name, state.round)?;
 
     state.summary = verdict.content.clone();
-    let input_tokens = verdict
-        .metadata
-        .get("input_tokens")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(0) as u32;
-    let output_tokens = verdict
-        .metadata
-        .get("output_tokens")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(0) as u32;
-    let tokens_estimated = verdict
-        .metadata
-        .get("tokens_estimated")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
+    let (input_tokens, output_tokens, tokens_estimated) = verdict.token_counts();
     state.add_opinion(Opinion {
         agent_id: judge.id.clone(),
         agent_name: judge.name.clone(),

@@ -324,11 +324,11 @@ fn default_sqlite_path(app_name: &str) -> Result<PathBuf, AppError> {
 
     #[cfg(target_os = "macos")]
     {
-        return Ok(home
+        Ok(home
             .join("Library")
             .join("Application Support")
             .join(app_name)
-            .join("app.db"));
+            .join("app.db"))
     }
 
     #[cfg(target_os = "windows")]

@@ -43,22 +43,13 @@ pub fn list_executions(
     let page_size = page_size.unwrap_or(20).clamp(1, 100);
 
     let mut executions = state.store.executions_list()?;
-    executions = executions
-        .into_iter()
-        .filter(|e| e.user_id == LOCAL_USER_ID)
-        .collect();
+    executions.retain(|e| e.user_id == LOCAL_USER_ID);
 
     if let Some(team_id) = team_id {
-        executions = executions
-            .into_iter()
-            .filter(|e| e.team_id == team_id)
-            .collect();
+        executions.retain(|e| e.team_id == team_id);
     }
     if let Some(status_filter) = status_filter {
-        executions = executions
-            .into_iter()
-            .filter(|e| e.status == status_filter)
-            .collect();
+        executions.retain(|e| e.status == status_filter);
     }
 
     executions.sort_by(|a, b| b.created_at.cmp(&a.created_at));
@@ -67,7 +58,7 @@ pub fn list_executions(
     let total_pages = if total == 0 {
         0
     } else {
-        (total + page_size - 1) / page_size
+        total.div_ceil(page_size)
     };
     let start = (page - 1) * page_size;
     let end = (start + page_size).min(total);

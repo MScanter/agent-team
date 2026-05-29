@@ -4,7 +4,9 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum OrchestrationPhase {
+    #[default]
     Initializing,
     Parallel,
     Responding,
@@ -13,12 +15,6 @@ pub enum OrchestrationPhase {
     Completed,
     Paused,
     Failed,
-}
-
-impl Default for OrchestrationPhase {
-    fn default() -> Self {
-        OrchestrationPhase::Initializing
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -104,4 +100,80 @@ fn default_tokens_budget() -> u32 {
 
 fn default_cost_budget() -> f64 {
     10.0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn opinion(id: &str, name: &str, input: u32, output: u32, wants: bool) -> Opinion {
+        Opinion {
+            agent_id: id.to_string(),
+            agent_name: name.to_string(),
+            content: format!("{name} speaks"),
+            round: 1,
+            phase: "initial".to_string(),
+            wants_to_continue: wants,
+            responding_to: None,
+            input_tokens: input,
+            output_tokens: output,
+        }
+    }
+
+    #[test]
+    fn add_opinion_accumulates_tokens_and_tracks_continuation() {
+        let mut state = OrchestrationState::default();
+        state.add_opinion(opinion("a1", "Alice", 100, 50, true));
+        state.add_opinion(opinion("a2", "Bob", 30, 20, false));
+
+        assert_eq!(state.tokens_used, 200);
+        assert_eq!(state.opinions.len(), 2);
+        assert_eq!(state.agent_wants_continue.get("a1"), Some(&true));
+        assert_eq!(state.agent_wants_continue.get("a2"), Some(&false));
+    }
+
+    #[test]
+    fn add_opinion_latest_continuation_wins_for_same_agent() {
+        let mut state = OrchestrationState::default();
+        state.add_opinion(opinion("a1", "Alice", 0, 0, true));
+        state.add_opinion(opinion("a1", "Alice", 0, 0, false));
+
+        assert_eq!(state.agent_wants_continue.get("a1"), Some(&false));
+        assert_eq!(state.opinions.len(), 2);
+    }
+
+    #[test]
+    fn add_opinion_saturates_token_counter() {
+        let mut state = OrchestrationState::default();
+        state.add_opinion(opinion("a1", "Alice", u32::MAX, 10, true));
+        assert_eq!(state.tokens_used, u32::MAX);
+    }
+
+    #[test]
+    fn recent_opinions_json_returns_trailing_window() {
+        let mut state = OrchestrationState::default();
+        for i in 0..5 {
+            state.add_opinion(opinion(&format!("a{i}"), &format!("Agent{i}"), 0, 0, true));
+        }
+        let recent = state.recent_opinions_json(2);
+        assert_eq!(recent.len(), 2);
+        assert_eq!(recent[0]["agent_name"], "Agent3");
+        assert_eq!(recent[1]["agent_name"], "Agent4");
+    }
+
+    #[test]
+    fn recent_opinions_json_clamps_to_available() {
+        let mut state = OrchestrationState::default();
+        state.add_opinion(opinion("a0", "Solo", 0, 0, true));
+        assert_eq!(state.recent_opinions_json(10).len(), 1);
+    }
+
+    #[test]
+    fn start_new_round_increments_round() {
+        let mut state = OrchestrationState::default();
+        assert_eq!(state.round, 0);
+        state.start_new_round();
+        state.start_new_round();
+        assert_eq!(state.round, 2);
+    }
 }

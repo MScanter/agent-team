@@ -28,6 +28,31 @@ pub struct AgentResponse {
     pub metadata: serde_json::Value,
 }
 
+impl AgentResponse {
+    /// Extract the `(input_tokens, output_tokens, estimated)` triple from
+    /// `metadata`, defaulting to `(0, 0, false)` when a field is absent or the
+    /// wrong type. Centralizes the token-accounting boilerplate that every
+    /// orchestration mode (roundtable / debate / pipeline) needs after a turn.
+    pub fn token_counts(&self) -> (u32, u32, bool) {
+        let input_tokens = self
+            .metadata
+            .get("input_tokens")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0) as u32;
+        let output_tokens = self
+            .metadata
+            .get("output_tokens")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0) as u32;
+        let estimated = self
+            .metadata
+            .get("tokens_estimated")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        (input_tokens, output_tokens, estimated)
+    }
+}
+
 impl AgentInstance {
     pub fn from_agent(agent: &Agent, llm: std::sync::Arc<dyn LLMProvider>) -> Self {
         Self {
@@ -124,7 +149,8 @@ impl AgentInstance {
         messages.push(Message {
             role: MessageRole::System,
             content: Some(
-                "协作提示：如果你认为当前讨论已经充分完成，请在回复末尾另起一行写上 [DONE]".to_string(),
+                "协作提示：如果你认为当前讨论已经充分完成，请在回复末尾另起一行写上 [DONE]"
+                    .to_string(),
             ),
             name: None,
             tool_call_id: None,
@@ -161,7 +187,7 @@ impl AgentInstance {
         let mut total_output_tokens: u32 = 0;
         let mut tokens_estimated: bool = false;
 
-        let max_iters: usize = self.max_tool_iterations.max(1).min(50) as usize;
+        let max_iters: usize = self.max_tool_iterations.clamp(1, 50) as usize;
         let mut final_text = String::new();
         let mut last_text = String::new();
         for _ in 0..max_iters {
@@ -251,4 +277,52 @@ fn should_continue(content: &str) -> bool {
 
 fn default_true() -> bool {
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn resp_with(metadata: serde_json::Value) -> AgentResponse {
+        AgentResponse {
+            content: String::new(),
+            wants_to_continue: true,
+            responding_to: None,
+            metadata,
+        }
+    }
+
+    #[test]
+    fn token_counts_reads_all_fields() {
+        let resp = resp_with(serde_json::json!({
+            "input_tokens": 12,
+            "output_tokens": 34,
+            "tokens_estimated": true
+        }));
+        assert_eq!(resp.token_counts(), (12, 34, true));
+    }
+
+    #[test]
+    fn token_counts_defaults_when_absent() {
+        assert_eq!(
+            resp_with(serde_json::json!({})).token_counts(),
+            (0, 0, false)
+        );
+        assert_eq!(
+            resp_with(serde_json::Value::Null).token_counts(),
+            (0, 0, false)
+        );
+    }
+
+    #[test]
+    fn token_counts_handles_partial_metadata() {
+        let resp = resp_with(serde_json::json!({ "input_tokens": 7 }));
+        assert_eq!(resp.token_counts(), (7, 0, false));
+    }
+
+    #[test]
+    fn should_continue_flips_on_done_marker() {
+        assert!(should_continue("still thinking"));
+        assert!(!should_continue("final answer\n[DONE]"));
+    }
 }

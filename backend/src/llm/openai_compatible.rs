@@ -93,7 +93,7 @@ impl LLMProvider for OpenAICompatibleProvider {
 
         let choice = parsed
             .choices
-            .get(0)
+            .first()
             .ok_or_else(|| AppError::Message("No choices".to_string()))?;
         let content = choice.message.content.clone().unwrap_or_default();
 
@@ -174,7 +174,7 @@ impl LLMProvider for OpenAICompatibleProvider {
 
         let choice = parsed
             .choices
-            .get(0)
+            .first()
             .ok_or_else(|| AppError::Message("No choices".to_string()))?;
 
         let content = choice.message.content.clone().unwrap_or_default();
@@ -186,7 +186,7 @@ impl LLMProvider for OpenAICompatibleProvider {
             .into_iter()
             .map(|tc| {
                 let args_value = serde_json::from_str(&tc.function.arguments)
-                    .unwrap_or_else(|_| serde_json::Value::String(tc.function.arguments));
+                    .unwrap_or(serde_json::Value::String(tc.function.arguments));
                 ToolCall {
                     id: tc.id,
                     name: tc.function.name,

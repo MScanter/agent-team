@@ -129,3 +129,125 @@ pub fn read_to_string_limited(path: &Path, max_bytes: u64) -> Result<(String, bo
         Err(e) => Ok((String::from_utf8_lossy(e.as_bytes()).to_string(), true)),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    /// A canonicalized temp dir to use as a workspace root. The real code always
+    /// canonicalizes the root (see `canonicalize_root`), which matters on macOS
+    /// where `/var/...` is a symlink to `/private/var/...`.
+    fn tmp_root() -> (tempfile::TempDir, PathBuf) {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        (dir, root)
+    }
+
+    #[test]
+    fn validate_relative_path_accepts_normal_path() {
+        assert_eq!(
+            validate_relative_path("src/main.rs").unwrap(),
+            PathBuf::from("src/main.rs")
+        );
+    }
+
+    #[test]
+    fn validate_relative_path_strips_current_dir_segments() {
+        assert_eq!(
+            validate_relative_path("./src/./main.rs").unwrap(),
+            PathBuf::from("src/main.rs")
+        );
+    }
+
+    #[test]
+    fn validate_relative_path_rejects_parent_traversal() {
+        let err = validate_relative_path("../etc/passwd").unwrap_err();
+        assert!(err.to_string().contains(".."));
+    }
+
+    #[test]
+    fn validate_relative_path_rejects_nested_traversal() {
+        assert!(validate_relative_path("a/b/../../../../etc/passwd").is_err());
+    }
+
+    #[test]
+    fn validate_relative_path_rejects_absolute_path() {
+        assert!(validate_relative_path("/etc/passwd").is_err());
+    }
+
+    #[test]
+    fn ensure_within_root_accepts_child_rejects_outside() {
+        let (_d, root) = tmp_root();
+        assert!(ensure_within_root(&root, &root.join("a/b/c")).is_ok());
+        let sibling = root.parent().unwrap().join("sibling");
+        assert!(ensure_within_root(&root, &sibling).is_err());
+    }
+
+    #[test]
+    fn resolve_write_path_creates_parents_and_stays_in_root() {
+        let (_d, root) = tmp_root();
+        let full = resolve_write_path(&root, Path::new("nested/dir/file.txt")).unwrap();
+        assert!(full.starts_with(&root));
+        assert!(full.parent().unwrap().is_dir());
+        assert_eq!(full.file_name().unwrap(), "file.txt");
+    }
+
+    #[test]
+    fn resolve_existing_path_resolves_real_file() {
+        let (_d, root) = tmp_root();
+        let target = root.join("hello.txt");
+        fs::write(&target, b"hi").unwrap();
+        let resolved = resolve_existing_path(&root, Path::new("hello.txt")).unwrap();
+        assert_eq!(resolved, target.canonicalize().unwrap());
+    }
+
+    #[test]
+    fn resolve_existing_path_errors_when_missing() {
+        let (_d, root) = tmp_root();
+        assert!(resolve_existing_path(&root, Path::new("nope.txt")).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn resolve_existing_path_rejects_symlink() {
+        use std::os::unix::fs::symlink;
+        let (_d, root) = tmp_root();
+        let target = root.join("real.txt");
+        fs::write(&target, b"secret").unwrap();
+        symlink(&target, root.join("link.txt")).unwrap();
+        let err = resolve_existing_path(&root, Path::new("link.txt")).unwrap_err();
+        assert!(err.to_string().to_lowercase().contains("symlink"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn ensure_safe_dir_rejects_symlinked_component() {
+        use std::os::unix::fs::symlink;
+        let (_d, root) = tmp_root();
+        let realdir = root.join("realdir");
+        fs::create_dir(&realdir).unwrap();
+        symlink(&realdir, root.join("linkdir")).unwrap();
+        let err = ensure_safe_dir(&root, Path::new("linkdir")).unwrap_err();
+        assert!(err.to_string().to_lowercase().contains("symlink"));
+    }
+
+    #[test]
+    fn read_to_string_limited_truncates_at_max_bytes() {
+        let (_d, root) = tmp_root();
+        let f = root.join("big.txt");
+        fs::write(&f, b"abcdefghij").unwrap();
+        let (s, _) = read_to_string_limited(&f, 4).unwrap();
+        assert_eq!(s, "abcd");
+    }
+
+    #[test]
+    fn read_to_string_limited_flags_invalid_utf8() {
+        let (_d, root) = tmp_root();
+        let f = root.join("bin.dat");
+        fs::write(&f, [0xff, 0xfe, b'a']).unwrap();
+        let (s, had_invalid) = read_to_string_limited(&f, 1024).unwrap();
+        assert!(had_invalid);
+        assert!(s.contains('a'));
+    }
+}

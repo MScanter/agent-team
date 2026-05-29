@@ -25,37 +25,25 @@ pub fn list_teams(
     let page_size = page_size.unwrap_or(20).clamp(1, 100);
 
     let mut teams = state.store.teams_list()?;
-    teams = teams
-        .into_iter()
-        .filter(|t| t.user_id == LOCAL_USER_ID || t.is_public)
-        .collect();
+    teams.retain(|t| t.user_id == LOCAL_USER_ID || t.is_public);
 
     if let Some(search) = search {
         let needle = search.to_lowercase();
-        teams = teams
-            .into_iter()
-            .filter(|t| {
-                t.name.to_lowercase().contains(&needle)
-                    || t.description
-                        .as_ref()
-                        .map(|d| d.to_lowercase().contains(&needle))
-                        .unwrap_or(false)
-            })
-            .collect();
+        teams.retain(|t| {
+            t.name.to_lowercase().contains(&needle)
+                || t.description
+                    .as_ref()
+                    .map(|d| d.to_lowercase().contains(&needle))
+                    .unwrap_or(false)
+        });
     }
 
     if let Some(mode) = collaboration_mode {
-        teams = teams
-            .into_iter()
-            .filter(|t| t.collaboration_mode == mode)
-            .collect();
+        teams.retain(|t| t.collaboration_mode == mode);
     }
 
     if let Some(is_template) = is_template {
-        teams = teams
-            .into_iter()
-            .filter(|t| t.is_template == is_template)
-            .collect();
+        teams.retain(|t| t.is_template == is_template);
     }
 
     teams.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
@@ -64,7 +52,7 @@ pub fn list_teams(
     let total_pages = if total == 0 {
         0
     } else {
-        (total + page_size - 1) / page_size
+        total.div_ceil(page_size)
     };
 
     let start = (page - 1) * page_size;

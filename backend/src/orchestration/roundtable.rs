@@ -39,21 +39,7 @@ pub async fn run_roundtable(
                 let agent_id = agent.id.clone();
                 let agent_name = agent.name.clone();
                 emit_tool_traces(emit, &traces, &agent_id, &agent_name, state.round)?;
-                let input_tokens = resp
-                    .metadata
-                    .get("input_tokens")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(0) as u32;
-                let output_tokens = resp
-                    .metadata
-                    .get("output_tokens")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(0) as u32;
-                let tokens_estimated = resp
-                    .metadata
-                    .get("tokens_estimated")
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false);
+                let (input_tokens, output_tokens, tokens_estimated) = resp.token_counts();
                 let opinion = Opinion {
                     agent_id: agent_id.clone(),
                     agent_name: agent_name.clone(),
@@ -100,10 +86,7 @@ pub async fn run_roundtable(
     }
 
     // 检查是否所有 Agent 都认为讨论已完成
-    let all_done = state
-        .agent_wants_continue
-        .values()
-        .all(|&wants| !wants);
+    let all_done = state.agent_wants_continue.values().all(|&wants| !wants);
 
     if !enable_response_phase || all_done {
         if all_done {
@@ -141,21 +124,7 @@ pub async fn run_roundtable(
                 let agent_id = agent.id.clone();
                 let agent_name = agent.name.clone();
                 emit_tool_traces(emit, &traces, &agent_id, &agent_name, state.round)?;
-                let input_tokens = resp
-                    .metadata
-                    .get("input_tokens")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(0) as u32;
-                let output_tokens = resp
-                    .metadata
-                    .get("output_tokens")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(0) as u32;
-                let tokens_estimated = resp
-                    .metadata
-                    .get("tokens_estimated")
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false);
+                let (input_tokens, output_tokens, tokens_estimated) = resp.token_counts();
                 let opinion = Opinion {
                     agent_id: agent_id.clone(),
                     agent_name: agent_name.clone(),

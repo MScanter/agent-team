@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use serde_json::Value;
@@ -109,7 +109,7 @@ fn as_u64(args: &Value, key: &str) -> Option<u64> {
 }
 
 fn execute_blocking(
-    root: &PathBuf,
+    root: &Path,
     limits: &ToolLimits,
     tool_name: &str,
     args: &Value,
