@@ -46,7 +46,7 @@ pub fn list_teams(
         teams.retain(|t| t.is_template == is_template);
     }
 
-    teams.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+    teams.sort_by_key(|t| std::cmp::Reverse(t.updated_at));
 
     let total = teams.len();
     let total_pages = if total == 0 {

@@ -293,8 +293,8 @@ pub async fn run_debate(
     state.phase = OrchestrationPhase::Completed;
 
     let mut all = Vec::new();
-    all.extend(pro.into_iter());
-    all.extend(con.into_iter());
+    all.extend(pro);
+    all.extend(con);
     all.push(judge);
     Ok(all)
 }

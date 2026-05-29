@@ -344,7 +344,7 @@ fn default_sqlite_path(app_name: &str) -> Result<PathBuf, AppError> {
         let base = std::env::var("XDG_DATA_HOME")
             .map(PathBuf::from)
             .unwrap_or_else(|_| home.join(".local").join("share"));
-        return Ok(base.join(app_name).join("app.db"));
+        Ok(base.join(app_name).join("app.db"))
     }
 }
 

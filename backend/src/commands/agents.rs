@@ -56,7 +56,7 @@ pub fn list_agents(
         agents.retain(|a| a.collaboration_style == style);
     }
 
-    agents.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+    agents.sort_by_key(|a| std::cmp::Reverse(a.updated_at));
 
     let total = agents.len();
     let total_pages = if total == 0 {

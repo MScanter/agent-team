@@ -52,7 +52,7 @@ pub fn list_executions(
         executions.retain(|e| e.status == status_filter);
     }
 
-    executions.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    executions.sort_by_key(|e| std::cmp::Reverse(e.created_at));
 
     let total = executions.len();
     let total_pages = if total == 0 {
