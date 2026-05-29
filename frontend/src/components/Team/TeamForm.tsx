@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { X, Plus, GripVertical, Trash2 } from 'lucide-react'
+import { getErrorMessage } from '@/utils/errors'
 import type { Team, TeamCreate, AgentListItem } from '@/types'
 import { useCreateTeam, useUpdateTeam, useAgents } from '@/hooks'
 import { useToast } from '@/components/Common/Toast'
@@ -39,9 +40,8 @@ export default function TeamForm({ team, onClose }: Props) {
         toast('success', '团队已创建')
       }
       onClose()
-    } catch (err: any) {
-      const msg = err?.response?.data?.detail || err?.message || '保存失败'
-      setFormError(typeof msg === 'string' ? msg : JSON.stringify(msg))
+    } catch (err) {
+      setFormError(getErrorMessage(err, '保存失败'))
       toast('error', '保存团队失败')
     }
   }

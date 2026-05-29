@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { X } from 'lucide-react'
+import { getErrorMessage } from '@/utils/errors'
 import type { Agent, AgentCreate } from '@/types'
 import { useCreateAgent, useModelConfigs, useUpdateAgent } from '@/hooks'
 import { useToast } from '@/components/Common/Toast'
@@ -47,9 +48,8 @@ export default function AgentForm({ agent, onClose }: Props) {
         toast('success', 'Agent 已创建')
       }
       onClose()
-    } catch (err: any) {
-      const msg = err?.response?.data?.detail || err?.message || '保存失败'
-      setFormError(typeof msg === 'string' ? msg : JSON.stringify(msg))
+    } catch (err) {
+      setFormError(getErrorMessage(err, '保存失败'))
       toast('error', '保存 Agent 失败')
     }
   }

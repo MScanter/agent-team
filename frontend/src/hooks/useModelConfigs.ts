@@ -102,7 +102,7 @@ export function useTestModelConfig() {
       };
 
       if (isTauriApp()) {
-        const response = await tauriInvoke<any>('test_llm', payload);
+        const response = await tauriInvoke<{ message: string; response_preview?: string; tokens_used?: number }>('test_llm', payload);
         return {
           message: response.message,
           config_id: id,

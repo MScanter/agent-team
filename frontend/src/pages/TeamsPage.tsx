@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Plus, Search, Users, MoreVertical, Trash2, Edit, Play } from 'lucide-react'
+import { getErrorMessage } from '@/utils/errors'
 import { useNavigate } from 'react-router-dom'
 import { useTeams, useDeleteTeam, useDebounce } from '@/hooks'
 import { TeamForm } from '@/components/Team'
@@ -49,8 +50,8 @@ export default function TeamsPage() {
       try {
         await deleteTeam.mutateAsync(id)
         toast('success', '团队已删除')
-      } catch (err: any) {
-        toast('error', err?.message || '删除失败')
+      } catch (err) {
+        toast('error', getErrorMessage(err, '删除失败'))
       }
     }
     setMenuOpen(null)

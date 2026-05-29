@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Plus, Settings, Trash2, Edit3 } from 'lucide-react'
+import { getErrorMessage } from '@/utils/errors'
 import type { ModelConfig } from '@/types'
 import { useModelConfigs, useDeleteModelConfig } from '@/hooks'
 import ModelConfigForm from './ModelConfigForm'
@@ -21,8 +22,8 @@ export default function ModelConfigManager() {
         await deleteMutation.mutateAsync(id);
         toast('success', 'API 配置已删除')
         refetch();
-      } catch (error: any) {
-        toast('error', error?.message || '删除 API 配置失败')
+      } catch (error) {
+        toast('error', getErrorMessage(error, '删除 API 配置失败'))
       }
     }
   };

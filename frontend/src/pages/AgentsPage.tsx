@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Plus, Search, Bot, MoreVertical, Copy, Trash2, Edit } from 'lucide-react'
+import { getErrorMessage } from '@/utils/errors'
 import { useAgents, useDeleteAgent, useDuplicateAgent, useDebounce } from '@/hooks'
 import { AgentForm } from '@/components/Agent'
 import type { Agent, AgentListItem } from '@/types'
@@ -32,8 +33,8 @@ export default function AgentsPage() {
       try {
         await deleteAgent.mutateAsync(id)
         toast('success', 'Agent 已删除')
-      } catch (err: any) {
-        toast('error', err?.message || '删除失败')
+      } catch (err) {
+        toast('error', getErrorMessage(err, '删除失败'))
       }
     }
     setMenuOpen(null)
@@ -43,8 +44,8 @@ export default function AgentsPage() {
     try {
       await duplicateAgent.mutateAsync({ id })
       toast('success', 'Agent 已复制')
-    } catch (err: any) {
-      toast('error', err?.message || '复制失败')
+    } catch (err) {
+      toast('error', getErrorMessage(err, '复制失败'))
     }
     setMenuOpen(null)
   }

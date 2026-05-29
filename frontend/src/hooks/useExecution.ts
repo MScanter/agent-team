@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { executionApi } from '@/services/api'
 import { isTauriApp, tauriInvoke, tauriListen } from '@/services/tauri'
+import { getErrorMessage } from '@/utils/errors'
 import type { ExecutionCreate, ExecutionMessage } from '@/types'
 
 export function useExecutions(params?: {
@@ -22,7 +23,7 @@ export function useExecution(id: string) {
     queryFn: () => executionApi.get(id),
     enabled: !!id,
     refetchInterval: (query) => {
-      const status = (query.state.data as any)?.status
+      const status = query.state.data?.status
       if (status === 'pending' || status === 'running' || status === 'paused') return 1000
       return false
     },
@@ -69,7 +70,7 @@ interface StreamEvent {
 }
 
 function buildWsUrl(path: string) {
-  const base = (import.meta as any).env?.VITE_API_BASE_URL || '/api'
+  const base = import.meta.env.VITE_API_BASE_URL || '/api'
   const baseStr = String(base).replace(/\/$/, '')
   if (baseStr.startsWith('http://') || baseStr.startsWith('https://')) {
     const url = new URL(baseStr)
@@ -173,25 +174,24 @@ export function useExecutionSocket(executionId: string | null) {
       const phase =
         (data.data.phase as string) ||
         (typeof data.data.stage === 'number' ? `stage_${data.data.stage}` : data.event_type)
-      const metadata = (() => {
-        if (isTool && data.data && typeof data.data === 'object') return data.data as any
-        const m = (data.data as any)?.metadata
-        if (m && typeof m === 'object') return m as any
+      const metadata: Record<string, unknown> = (() => {
+        if (isTool && data.data && typeof data.data === 'object') return data.data
+        const m = data.data.metadata
+        if (m && typeof m === 'object') return m as Record<string, unknown>
         return {}
       })()
-      const toolName = isTool ? String((data.data as any)?.tool_name || 'tool') : null
-      const inputTokens =
-        (typeof (data.data as any)?.input_tokens === 'number' ? (data.data as any).input_tokens : null) ??
-        (typeof (metadata as any)?.input_tokens === 'number' ? (metadata as any).input_tokens : null) ??
-        0
-      const outputTokens =
-        (typeof (data.data as any)?.output_tokens === 'number' ? (data.data as any).output_tokens : null) ??
-        (typeof (metadata as any)?.output_tokens === 'number' ? (metadata as any).output_tokens : null) ??
-        0
-      const tokensEstimated =
-        (typeof (data.data as any)?.tokens_estimated === 'boolean' ? (data.data as any).tokens_estimated : null) ??
-        (typeof (metadata as any)?.tokens_estimated === 'boolean' ? (metadata as any).tokens_estimated : null) ??
-        false
+      const pickNumber = (...values: unknown[]): number => {
+        for (const value of values) if (typeof value === 'number') return value
+        return 0
+      }
+      const pickBoolean = (...values: unknown[]): boolean => {
+        for (const value of values) if (typeof value === 'boolean') return value
+        return false
+      }
+      const toolName = isTool ? String(data.data.tool_name || 'tool') : null
+      const inputTokens = pickNumber(data.data.input_tokens, metadata.input_tokens)
+      const outputTokens = pickNumber(data.data.output_tokens, metadata.output_tokens)
+      const tokensEstimated = pickBoolean(data.data.tokens_estimated, metadata.tokens_estimated)
       const msg: ExecutionMessage = {
         id: (data.data.message_id as string) || `${executionId}-${data.sequence}`,
         sequence: (data.data.message_sequence as number) || data.sequence,
@@ -251,10 +251,10 @@ export function useExecutionSocket(executionId: string | null) {
     if (isTauriApp()) {
       let cancelled = false
       void (async () => {
-        const unlisten = await tauriListen<any>('execution-event', (payload) => {
+        const unlisten = await tauriListen<StreamEvent | string>('execution-event', (payload) => {
           let data: StreamEvent | null = null
           try {
-            data = typeof payload === 'string' ? (JSON.parse(payload) as StreamEvent) : (payload as StreamEvent)
+            data = typeof payload === 'string' ? (JSON.parse(payload) as StreamEvent) : payload
           } catch {
             data = null
           }
@@ -271,7 +271,7 @@ export function useExecutionSocket(executionId: string | null) {
       })().catch((e) => {
         if (cancelled) return
         setStatus('error')
-        setError(String((e as any)?.message || e))
+        setError(getErrorMessage(e))
       })
 
       return () => {
@@ -350,7 +350,7 @@ export function useExecutionSocket(executionId: string | null) {
         target_agent_id: targetAgentId,
       }).catch((e) => {
         setStatus('error')
-        setError(String((e as any)?.message || e))
+        setError(getErrorMessage(e))
       })
       return true
     }

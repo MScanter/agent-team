@@ -4,13 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import type { FileEntry } from '@/types'
 import { executionApi } from '@/services/api'
 import { tauriSelectDirectory } from '@/services/tauri'
-
-function getErrorMessage(err: unknown) {
-  if (err && typeof err === 'object' && 'message' in err && typeof (err as any).message === 'string') {
-    return (err as any).message as string
-  }
-  return String(err)
-}
+import { getErrorMessage } from '@/utils/errors'
 
 function basename(path: string) {
   const parts = path.split('/').filter(Boolean)

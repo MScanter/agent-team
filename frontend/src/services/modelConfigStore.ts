@@ -13,26 +13,27 @@ function newId() {
   return `mc_${Math.random().toString(16).slice(2)}_${Date.now()}`
 }
 
-function normalize(raw: any): ModelConfig | null {
+function normalize(raw: unknown): ModelConfig | null {
   if (!raw || typeof raw !== 'object') return null
-  if (!raw.id || !raw.name || !raw.model_id) return null
+  const r = raw as Record<string, unknown>
+  if (!r.id || !r.name || !r.model_id) return null
 
   return {
-    id: String(raw.id),
-    user_id: raw.user_id ? String(raw.user_id) : undefined,
-    name: String(raw.name),
-    description: raw.description ? String(raw.description) : undefined,
+    id: String(r.id),
+    user_id: r.user_id ? String(r.user_id) : undefined,
+    name: String(r.name),
+    description: r.description ? String(r.description) : undefined,
     provider: 'openai_compatible',
-    model_id: String(raw.model_id),
-    api_key: raw.api_key ? String(raw.api_key) : undefined,
-    base_url: raw.base_url ? String(raw.base_url) : undefined,
-    max_context_length: Number.isFinite(raw.max_context_length) ? Number(raw.max_context_length) : 8192,
-    supports_tools: raw.supports_tools !== undefined ? Boolean(raw.supports_tools) : true,
-    supports_vision: raw.supports_vision !== undefined ? Boolean(raw.supports_vision) : false,
-    is_active: raw.is_active !== undefined ? Boolean(raw.is_active) : true,
-    is_default: raw.is_default !== undefined ? Boolean(raw.is_default) : false,
-    created_at: raw.created_at ? String(raw.created_at) : nowIso(),
-    updated_at: raw.updated_at ? String(raw.updated_at) : nowIso(),
+    model_id: String(r.model_id),
+    api_key: r.api_key ? String(r.api_key) : undefined,
+    base_url: r.base_url ? String(r.base_url) : undefined,
+    max_context_length: Number.isFinite(r.max_context_length) ? Number(r.max_context_length) : 8192,
+    supports_tools: r.supports_tools !== undefined ? Boolean(r.supports_tools) : true,
+    supports_vision: r.supports_vision !== undefined ? Boolean(r.supports_vision) : false,
+    is_active: r.is_active !== undefined ? Boolean(r.is_active) : true,
+    is_default: r.is_default !== undefined ? Boolean(r.is_default) : false,
+    created_at: r.created_at ? String(r.created_at) : nowIso(),
+    updated_at: r.updated_at ? String(r.updated_at) : nowIso(),
   }
 }
 

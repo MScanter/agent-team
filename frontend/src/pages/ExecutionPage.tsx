@@ -7,6 +7,8 @@ import { buildExecutionLLMConfig } from '@/services/modelConfigStore'
 import { isTauriApp, tauriConfirm } from '@/services/tauri'
 import ExecutionWorkspacePanel from '@/components/Execution/ExecutionWorkspacePanel'
 import { useToast } from '@/components/Common/Toast'
+import { getErrorMessage } from '@/utils/errors'
+import type { ExecutionMessage } from '@/types'
 
 export default function ExecutionPage() {
   const navigate = useNavigate()
@@ -17,7 +19,7 @@ export default function ExecutionPage() {
 
   const [chatInput, setChatInput] = useState('')
   const [initialInput, setInitialInput] = useState('')
-  const [clientMessages, setClientMessages] = useState<any[]>([])
+  const [clientMessages, setClientMessages] = useState<ExecutionMessage[]>([])
   const [isSendingFollowup, setIsSendingFollowup] = useState(false)
   const [startError, setStartError] = useState<string | null>(null)
   const [executionId, setExecutionId] = useState<string | null>(id || null)
@@ -33,11 +35,11 @@ export default function ExecutionPage() {
     useExecutionSocket(effectiveId)
 
   const baseMessages = useMemo(() => {
-    const merged = new Map<string, any>()
+    const merged = new Map<string, ExecutionMessage>()
     const recent = execution?.recent_messages || []
     for (const m of recent) merged.set(m.id, m)
     for (const m of messages || []) merged.set(m.id, m)
-    return Array.from(merged.values()).sort((a: any, b: any) => {
+    return Array.from(merged.values()).sort((a, b) => {
       const sa = Number(a.sequence || 0)
       const sb = Number(b.sequence || 0)
       if (sa !== sb) return sa - sb
@@ -46,10 +48,10 @@ export default function ExecutionPage() {
   }, [execution?.recent_messages, messages])
 
   const displayMessages = useMemo(() => {
-    const merged = new Map<string, any>()
+    const merged = new Map<string, ExecutionMessage>()
     for (const m of baseMessages) merged.set(m.id, m)
     for (const m of clientMessages) merged.set(m.id, m)
-    return Array.from(merged.values()).sort((a: any, b: any) => {
+    return Array.from(merged.values()).sort((a, b) => {
       const sa = Number(a.sequence || 0)
       const sb = Number(b.sequence || 0)
       if (sa !== sb) return sa - sb
@@ -90,9 +92,8 @@ export default function ExecutionPage() {
       })
       setExecutionId(result.id)
       navigate(`/execution/${result.id}?team=${teamId}`, { replace: true })
-    } catch (e: any) {
-      const detail = e?.response?.data?.detail
-      setStartError(typeof detail === 'string' ? detail : detail ? JSON.stringify(detail) : e?.message || '创建执行失败')
+    } catch (e) {
+      setStartError(getErrorMessage(e, '创建执行失败'))
       toast('error', '启动讨论失败')
     } finally {
       setIsCreating(false)
@@ -103,8 +104,8 @@ export default function ExecutionPage() {
     if (!effectiveId) return
     try {
       await controlExecution.mutateAsync({ id: effectiveId, action })
-    } catch (e: any) {
-      toast('error', e?.message || `操作 ${action} 失败`)
+    } catch (e) {
+      toast('error', getErrorMessage(e, `操作 ${action} 失败`))
     }
   }
 
@@ -135,9 +136,8 @@ export default function ExecutionPage() {
       setExecutionId(null)
       toast('success', '讨论已删除')
       navigate('/teams')
-    } catch (e: any) {
-      const detail = e?.response?.data?.detail
-      setStartError(typeof detail === 'string' ? detail : detail ? JSON.stringify(detail) : e?.message || '删除失败')
+    } catch (e) {
+      setStartError(getErrorMessage(e, '删除失败'))
       toast('error', '删除讨论失败')
     }
   }

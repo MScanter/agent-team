@@ -28,7 +28,7 @@ export const agentApi = {
     is_template?: boolean
   }): Promise<PaginatedResponse<AgentListItem>> => {
     if (isTauriApp()) {
-      return tauriInvoke('list_agents', params as any)
+      return tauriInvoke('list_agents', params as Record<string, unknown>)
     }
     const { data } = await api.get('/agents', { params })
     return data
@@ -92,7 +92,7 @@ export const teamApi = {
     is_template?: boolean
   }): Promise<PaginatedResponse<TeamListItem>> => {
     if (isTauriApp()) {
-      return tauriInvoke('list_teams', params as any)
+      return tauriInvoke('list_teams', params as Record<string, unknown>)
     }
     const { data } = await api.get('/teams', { params })
     return data
@@ -156,7 +156,7 @@ export const executionApi = {
     status_filter?: string
   }): Promise<PaginatedResponse<Execution>> => {
     if (isTauriApp()) {
-      return tauriInvoke('list_executions', params as any)
+      return tauriInvoke('list_executions', params as Record<string, unknown>)
     }
     const { data } = await api.get('/executions', { params })
     return data

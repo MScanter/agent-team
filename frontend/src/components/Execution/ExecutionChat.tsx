@@ -54,12 +54,12 @@ function MessageBubble({ message }: { message: ExecutionMessage }) {
   const isTool = message.phase === 'tool_call' || message.phase === 'tool_result' || Boolean(message.sender_name?.startsWith('tool:'))
   const totalTokens = (message.input_tokens || 0) + (message.output_tokens || 0)
 
-  const toolMeta = (isTool ? (message.metadata as any) : null) as any
+  const toolMeta = isTool ? message.metadata : null
   const toolName =
     (toolMeta && typeof toolMeta === 'object' && toolMeta.tool_name ? String(toolMeta.tool_name) : null) ||
     (message.sender_name?.startsWith('tool:') ? message.sender_name.slice('tool:'.length) : null) ||
     'tool'
-  const toolStatus = message.phase === 'tool_result' ? ((toolMeta as any)?.ok === true ? 'OK' : (toolMeta as any)?.ok === false ? 'ERROR' : 'RESULT') : 'CALL'
+  const toolStatus = message.phase === 'tool_result' ? (toolMeta?.ok === true ? 'OK' : toolMeta?.ok === false ? 'ERROR' : 'RESULT') : 'CALL'
   const toolAgent = toolMeta?.agent_name ? String(toolMeta.agent_name) : null
   const toolDuration = typeof toolMeta?.duration_ms === 'number' ? `${toolMeta.duration_ms}ms` : null
   const toolError = toolMeta?.error ? String(toolMeta.error) : null
@@ -119,7 +119,7 @@ function MessageBubble({ message }: { message: ExecutionMessage }) {
                 {message.phase === 'tool_result' && (
                   <div>
                     <div className="text-[10px] font-press text-gray-400 mb-2 uppercase tracking-tighter">OUTPUT</div>
-                    {toolName === 'read_file' && toolMeta?.ok === true && toolMeta?.output?.truncated === true && (
+                    {toolName === 'read_file' && toolMeta?.ok === true && (toolMeta?.output as { truncated?: boolean } | undefined)?.truncated === true && (
                       <div className="mb-3 text-[10px] font-press text-yellow-300 bg-yellow-900/30 border-2 border-yellow-500 p-3 shadow-pixel-sm uppercase tracking-tighter leading-relaxed">
                         文件过大，已截断。使用 offset 参数读取更多内容
                       </div>

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { X } from 'lucide-react'
+import { getErrorMessage } from '@/utils/errors'
 import type { ModelConfig, ModelConfigCreate, ModelConfigUpdate } from '@/types'
 import { useCreateModelConfig, useUpdateModelConfig, useTestModelConfig } from '@/hooks'
 import { useToast } from '@/components/Common/Toast'
@@ -52,9 +53,8 @@ export default function ModelConfigForm({ config, onClose }: Props) {
         toast('success', 'API 配置已创建')
       }
       onClose()
-    } catch (err: any) {
-      const msg = err?.response?.data?.detail || err?.message || '保存失败'
-      setFormError(typeof msg === 'string' ? msg : JSON.stringify(msg))
+    } catch (err) {
+      setFormError(getErrorMessage(err, '保存失败'))
       toast('error', '保存 API 配置失败')
     }
   }
@@ -69,10 +69,8 @@ export default function ModelConfigForm({ config, onClose }: Props) {
     try {
       const result = await testModelConfig.mutateAsync({ id: config.id });
       setTestResult(result.response_preview || result.message);
-    } catch (error: any) {
-      const detail = error?.response?.data?.detail;
-      const detailText = typeof detail === 'string' ? detail : detail ? JSON.stringify(detail, null, 2) : null;
-      setTestError(detailText || error.message || '测试失败');
+    } catch (error) {
+      setTestError(getErrorMessage(error, '测试失败'));
     } finally {
       setIsTesting(false);
     }
